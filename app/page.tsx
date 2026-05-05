@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import KakaoPlaceSearch from './KakaoMap'
+import Auth from './Auth'
 
 type Post = {
   id: string
@@ -10,6 +11,14 @@ type Post = {
   tags: string | null
   image_url: string | null
   created_at: string
+  user_id: string | null
+  nickname: string | null
+}
+
+type User = {
+  id: string
+  email: string
+  nickname: string
 }
 
 type Errors = {
@@ -30,6 +39,7 @@ export default function Home() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showMapSearch, setShowMapSearch] = useState(false)
+  const [showAuth, setShowAuth] = useState(false)
   const [activeTab, setActiveTab] = useState(0)
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
@@ -41,9 +51,36 @@ export default function Home() {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [errors, setErrors] = useState<Errors>({})
+  const [user, setUser] = useState<User | null>(null)
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { fetchPosts() }, [])
+  useEffect(() => {
+    fetchPosts()
+    // 로그인 상태 확인
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email ?? '',
+          nickname: session.user.user_metadata?.nickname ?? session.user.email ?? ''
+        })
+      }
+    })
+    // 로그인 상태 변경 감지
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email ?? '',
+          nickname: session.user.user_metadata?.nickname ?? session.user.email ?? ''
+        })
+      } else {
+        setUser(null)
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   async function fetchPosts() {
     setLoading(true)
@@ -53,6 +90,11 @@ export default function Home() {
       .order('created_at', { ascending: false })
     if (data) setPosts(data)
     setLoading(false)
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    setUser(null)
   }
 
   function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -87,38 +129,30 @@ export default function Home() {
   }
 
   async function handleSubmit() {
+    if (!user) { setShowAuth(true); return }
     if (!validate()) return
     setUploading(true)
 
     let image_url = null
     if (imageFile) {
       const fileName = `${Date.now()}_${imageFile.name}`
-      const { data, error } = await supabase.storage
-        .from('images')
-        .upload(fileName, imageFile)
+      const { data, error } = await supabase.storage.from('images').upload(fileName, imageFile)
       if (!error && data) {
-        const { data: urlData } = supabase.storage
-          .from('images')
-          .getPublicUrl(data.path)
+        const { data: urlData } = supabase.storage.from('images').getPublicUrl(data.path)
         image_url = urlData.publicUrl
       }
     }
 
     const fullLocation = locationDetail ? `${location} (${locationDetail})` : location
-    const { error } = await supabase
-      .from('posts')
-      .insert({ title, location: fullLocation, tags, image_url })
+    const { error } = await supabase.from('posts').insert({
+      title, location: fullLocation, tags, image_url,
+      user_id: user.id, nickname: user.nickname
+    })
 
     if (!error) {
-      setTitle('')
-      setLocation('')
-      setLocationDetail('')
-      setTags('')
-      setImageFile(null)
-      setImagePreview(null)
-      setErrors({})
-      setShowForm(false)
-      fetchPosts()
+      setTitle(''); setLocation(''); setLocationDetail(''); setTags('')
+      setImageFile(null); setImagePreview(null); setErrors({})
+      setShowForm(false); fetchPosts()
     }
     setUploading(false)
   }
@@ -135,32 +169,83 @@ export default function Home() {
     p.title.includes(search) || (p.location ?? '').includes(search)
   )
 
+  // 제보 상세 화면
+  if (selectedPost) {
+    return (
+      <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
+        <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button onClick={() => setSelectedPost(null)} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>←</button>
+          <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0, flex: 1 }}>제보 상세</h2>
+        </header>
+
+        <main style={{ flex: 1, overflowY: 'auto' }}>
+          {/* 사진 */}
+          {selectedPost.image_url && (
+            <img src={selectedPost.image_url} alt={selectedPost.title} style={{ width: '100%', height: '280px', objectFit: 'cover' }} />
+          )}
+
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* 제목 & 태그 */}
+            <div>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#222', margin: '0 0 8px' }}>{selectedPost.title}</h3>
+              {selectedPost.tags && (
+                <p style={{ fontSize: '13px', color: '#FF6B6B', margin: 0 }}>{selectedPost.tags}</p>
+              )}
+            </div>
+
+            {/* 제보자 & 시간 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', backgroundColor: '#fafafa', borderRadius: '12px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#FF6B6B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: '700', flexShrink: 0 }}>
+                {(selectedPost.nickname ?? '익명')[0]}
+              </div>
+              <div>
+                <p style={{ fontSize: '13px', fontWeight: '600', color: '#222', margin: '0 0 2px' }}>{selectedPost.nickname ?? '익명'}</p>
+                <p style={{ fontSize: '11px', color: '#aaa', margin: 0 }}>{timeAgo(selectedPost.created_at)}</p>
+              </div>
+            </div>
+
+            {/* 위치 */}
+            {selectedPost.location && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '16px' }}>📍</span>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: 0 }}>{selectedPost.location}</p>
+                </div>
+              </div>
+            )}
+
+            {/* 확인했어요 버튼 */}
+            <button style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#FFF5F5', color: '#FF6B6B', border: '1.5px solid #FF6B6B', cursor: 'pointer', fontSize: '15px', fontWeight: '700' }}>
+              ✅ 나도 확인했어요!
+            </button>
+
+            {/* 정보 수정 요청 */}
+            <button style={{ width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: '#fafafa', color: '#aaa', border: '1px solid #f0f0f0', cursor: 'pointer', fontSize: '13px' }}>
+              🚨 정보가 잘못됐어요
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // 제보하기 폼
   if (showForm) {
     return (
       <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
         <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <button onClick={() => { setShowForm(false); setImagePreview(null); setImageFile(null); setErrors({}); setLocation(''); setLocationDetail('') }} style={{ fontSize: '14px', color: '#888', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
           <h2 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>제보하기</h2>
-          <button
-            onClick={handleSubmit}
-            disabled={uploading}
-            style={{ fontSize: '14px', color: '#fff', fontWeight: '600', background: '#FF6B6B', border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: '20px', opacity: uploading ? 0.6 : 1 }}
-          >
+          <button onClick={handleSubmit} disabled={uploading} style={{ fontSize: '14px', color: '#fff', fontWeight: '600', background: '#FF6B6B', border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: '20px', opacity: uploading ? 0.6 : 1 }}>
             {uploading ? '올리는 중...' : '올리기'}
           </button>
         </header>
 
         <main style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
           {/* 사진 */}
           <div>
-            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>
-              사진 <span style={{ color: '#FF6B6B' }}>*</span>
-            </label>
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              style={{ width: '100%', height: '200px', borderRadius: '16px', border: errors.image ? '2px dashed #FF6B6B' : imagePreview ? 'none' : '2px dashed #f0f0f0', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
-            >
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>사진 <span style={{ color: '#FF6B6B' }}>*</span></label>
+            <div onClick={() => fileInputRef.current?.click()} style={{ width: '100%', height: '200px', borderRadius: '16px', border: errors.image ? '2px dashed #FF6B6B' : imagePreview ? 'none' : '2px dashed #f0f0f0', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}>
               {imagePreview ? (
                 <>
                   <img src={imagePreview} alt="미리보기" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -181,41 +266,22 @@ export default function Home() {
 
           {/* 뭐가 있어요 */}
           <div>
-            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>
-              뭐가 있어요? <span style={{ color: '#FF6B6B' }}>*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="예) 피카츄 인형, 산리오 가챠"
-              value={title}
-              onChange={(e) => { setTitle(e.target.value); setErrors(prev => ({ ...prev, title: undefined })) }}
-              style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.title ? '#FF6B6B' : title ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }}
-            />
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>뭐가 있어요? <span style={{ color: '#FF6B6B' }}>*</span></label>
+            <input type="text" placeholder="예) 피카츄 인형, 산리오 가챠" value={title} onChange={(e) => { setTitle(e.target.value); setErrors(prev => ({ ...prev, title: undefined })) }} style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.title ? '#FF6B6B' : title ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }} />
             {errors.title && <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.title}</p>}
           </div>
 
           {/* 업체 위치 */}
           <div>
-            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>
-              업체 위치 <span style={{ color: '#FF6B6B' }}>*</span>
-            </label>
-
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>업체 위치 <span style={{ color: '#FF6B6B' }}>*</span></label>
             {location ? (
-              /* 선택된 업체 표시 */
               <div style={{ padding: '12px 14px', borderRadius: '10px', border: '1.5px solid #FF6B6B', backgroundColor: '#FFF5F5', position: 'relative' }}>
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: '0 0 2px', paddingRight: '32px' }}>{location}</p>
                 {locationDetail && <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>{locationDetail}</p>}
-                <button
-                  onClick={() => { setLocation(''); setLocationDetail('') }}
-                  style={{ position: 'absolute', top: '10px', right: '10px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#f0f0f0', color: '#888', fontSize: '12px', border: 'none', cursor: 'pointer' }}
-                >✕</button>
+                <button onClick={() => { setLocation(''); setLocationDetail('') }} style={{ position: 'absolute', top: '10px', right: '10px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#f0f0f0', color: '#888', fontSize: '12px', border: 'none', cursor: 'pointer' }}>✕</button>
               </div>
             ) : (
-              /* 검색 버튼 */
-              <button
-                onClick={() => setShowMapSearch(true)}
-                style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.location ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', backgroundColor: '#fafafa', cursor: 'pointer', textAlign: 'left', color: '#aaa', display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
+              <button onClick={() => setShowMapSearch(true)} style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.location ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', backgroundColor: '#fafafa', cursor: 'pointer', textAlign: 'left', color: '#aaa', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>🔍</span> 업체명으로 검색하기
               </button>
             )}
@@ -224,27 +290,12 @@ export default function Home() {
 
           {/* 태그 */}
           <div>
-            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>
-              태그 <span style={{ fontSize: '11px', color: '#aaa', fontWeight: '400' }}>선택</span>
-            </label>
-            <input
-              type="text"
-              placeholder="#피카츄 #포켓몬"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1.5px solid #f0f0f0', fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }}
-            />
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>태그 <span style={{ fontSize: '11px', color: '#aaa', fontWeight: '400' }}>선택</span></label>
+            <input type="text" placeholder="#피카츄 #포켓몬" value={tags} onChange={(e) => setTags(e.target.value)} style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1.5px solid #f0f0f0', fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }} />
           </div>
-
         </main>
 
-        {/* 카카오맵 검색 팝업 */}
-        {showMapSearch && (
-          <KakaoPlaceSearch
-            onSelect={handlePlaceSelect}
-            onClose={() => setShowMapSearch(false)}
-          />
-        )}
+        {showMapSearch && <KakaoPlaceSearch onSelect={handlePlaceSelect} onClose={() => setShowMapSearch(false)} />}
       </div>
     )
   }
@@ -253,17 +304,18 @@ export default function Home() {
     <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
       <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#FF6B6B', margin: 0 }}>🧸 뽑뽑</h1>
-        <button style={{ fontSize: '13px', color: '#888', background: 'none', border: 'none', cursor: 'pointer' }}>로그인</button>
+        {user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: '#888' }}>{user.nickname}</span>
+            <button onClick={handleLogout} style={{ fontSize: '12px', color: '#aaa', background: 'none', border: 'none', cursor: 'pointer' }}>로그아웃</button>
+          </div>
+        ) : (
+          <button onClick={() => setShowAuth(true)} style={{ fontSize: '13px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: '20px', backgroundColor: '#f5f5f5' }}>로그인</button>
+        )}
       </header>
 
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0' }}>
-        <input
-          type="text"
-          placeholder="🔍  인형 이름, 업체명으로 검색"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1.5px solid #f0f0f0', backgroundColor: '#fafafa', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
-        />
+        <input type="text" placeholder="🔍  인형 이름, 업체명으로 검색" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1.5px solid #f0f0f0', backgroundColor: '#fafafa', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
       </div>
 
       <main style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -275,7 +327,7 @@ export default function Home() {
           </p>
         ) : (
           filtered.map(item => (
-            <div key={item.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', borderRadius: '12px', border: '1px solid #f0f0f0', cursor: 'pointer' }}>
+            <div key={item.id} onClick={() => setSelectedPost(item)} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', borderRadius: '12px', border: '1px solid #f0f0f0', cursor: 'pointer' }}>
               <div style={{ width: '64px', height: '64px', borderRadius: '12px', backgroundColor: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
                 {item.image_url ? (
                   <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -287,32 +339,27 @@ export default function Home() {
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: '0 0 4px' }}>{item.title}</p>
                 {item.location && <p style={{ fontSize: '12px', color: '#888', margin: '0 0 2px' }}>📍 {item.location}</p>}
                 {item.tags && <p style={{ fontSize: '11px', color: '#FF6B6B', margin: '0 0 2px' }}>{item.tags}</p>}
-                <p style={{ fontSize: '11px', color: '#bbb', margin: 0 }}>{timeAgo(item.created_at)}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <p style={{ fontSize: '11px', color: '#bbb', margin: 0 }}>{item.nickname ?? '익명'} · {timeAgo(item.created_at)}</p>
+                </div>
               </div>
             </div>
           ))
         )}
       </main>
 
-      <button
-        onClick={() => setShowForm(true)}
-        style={{ position: 'fixed', bottom: '72px', right: 'calc(50% - 215px + 20px)', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#FF6B6B', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.4)' }}>
-        +
-      </button>
+      <button onClick={() => { if (!user) { setShowAuth(true); return }; setShowForm(true) }} style={{ position: 'fixed', bottom: '72px', right: 'calc(50% - 215px + 20px)', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#FF6B6B', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.4)' }}>+</button>
 
       <nav style={{ borderTop: '1px solid #f0f0f0', display: 'flex', backgroundColor: '#fff' }}>
-        {[
-          { icon: '🔍', label: '검색' },
-          { icon: '🗺️', label: '지도' },
-          { icon: '🛍️', label: '마켓' },
-          { icon: '📸', label: '피드' },
-        ].map((item, i) => (
+        {[{ icon: '🔍', label: '검색' }, { icon: '🗺️', label: '지도' }, { icon: '🛍️', label: '마켓' }, { icon: '📸', label: '피드' }].map((item, i) => (
           <button key={item.label} onClick={() => setActiveTab(i)} style={{ flex: 1, padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', background: 'none', border: 'none', cursor: 'pointer' }}>
             <span style={{ fontSize: '20px' }}>{item.icon}</span>
             <span style={{ fontSize: '11px', color: activeTab === i ? '#FF6B6B' : '#888', fontWeight: activeTab === i ? '600' : '400' }}>{item.label}</span>
           </button>
         ))}
       </nav>
+
+      {showAuth && <Auth onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
     </div>
   )
 }
