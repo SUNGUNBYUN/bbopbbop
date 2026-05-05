@@ -13,6 +13,18 @@ type Post = {
   created_at: string
   user_id: string | null
   nickname: string | null
+  view_count: number
+  like_count: number
+  comment_count: number
+}
+
+type Comment = {
+  id: string
+  post_id: string
+  user_id: string
+  nickname: string | null
+  content: string
+  created_at: string
 }
 
 type User = {
@@ -53,11 +65,17 @@ export default function Home() {
   const [errors, setErrors] = useState<Errors>({})
   const [user, setUser] = useState<User | null>(null)
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
+  const [myLiked, setMyLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
+  const [likeLoading, setLikeLoading] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [viewCount, setViewCount] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchPosts()
-    // 로그인 상태 확인
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser({
@@ -67,7 +85,6 @@ export default function Home() {
         })
       }
     })
-    // 로그인 상태 변경 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
@@ -81,6 +98,50 @@ export default function Home() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (!selectedPost) return
+    setMyLiked(false)
+    setLikeCount(0)
+    setComments([])
+    setViewCount(0)
+    fetchPostDetail(selectedPost.id)
+  }, [selectedPost?.id])
+
+  async function fetchPostDetail(postId: string) {
+    // 조회수 증가
+    await supabase.rpc('increment_view_count', { post_id: postId })
+
+    // 최신 post 데이터
+    const { data: postData } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('id', postId)
+      .single()
+
+    if (postData) {
+      setViewCount(postData.view_count ?? 0)
+      setLikeCount(postData.like_count ?? 0)
+    }
+
+    // 좋아요 여부 확인
+    const { data: likesData } = await supabase
+      .from('likes')
+      .select('*')
+      .eq('post_id', postId)
+    if (likesData) {
+      setLikeCount(likesData.length)
+      if (user) setMyLiked(likesData.some(l => l.user_id === user.id))
+    }
+
+    // 댓글
+    const { data: commentsData } = await supabase
+      .from('comments')
+      .select('*')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+    if (commentsData) setComments(commentsData)
+  }
 
   async function fetchPosts() {
     setLoading(true)
@@ -157,6 +218,56 @@ export default function Home() {
     setUploading(false)
   }
 
+  async function handleLike() {
+    if (!user) { setShowAuth(true); return }
+    if (!selectedPost) return
+    setLikeLoading(true)
+
+    if (myLiked) {
+      await supabase.from('likes').delete()
+        .eq('post_id', selectedPost.id)
+        .eq('user_id', user.id)
+      setMyLiked(false)
+      setLikeCount(prev => prev - 1)
+    } else {
+      const { error } = await supabase.from('likes').insert({
+        post_id: selectedPost.id,
+        user_id: user.id
+      })
+      if (!error) { setMyLiked(true); setLikeCount(prev => prev + 1) }
+    }
+    setLikeLoading(false)
+  }
+
+  async function handleComment() {
+    if (!user) { setShowAuth(true); return }
+    if (!selectedPost || !newComment.trim()) return
+    setCommentLoading(true)
+
+    const { error } = await supabase.from('comments').insert({
+      post_id: selectedPost.id,
+      user_id: user.id,
+      nickname: user.nickname,
+      content: newComment.trim()
+    })
+
+    if (!error) {
+      setNewComment('')
+      const { data } = await supabase
+        .from('comments')
+        .select('*')
+        .eq('post_id', selectedPost.id)
+        .order('created_at', { ascending: true })
+      if (data) setComments(data)
+    }
+    setCommentLoading(false)
+  }
+
+  async function handleBack() {
+    setSelectedPost(null)
+    setTimeout(() => fetchPosts(), 500)
+  }
+
   function timeAgo(dateStr: string) {
     const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
     if (diff < 60) return '방금 전'
@@ -173,24 +284,27 @@ export default function Home() {
   if (selectedPost) {
     return (
       <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
-        <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => setSelectedPost(null)} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>←</button>
+        <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+          <button onClick={handleBack} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>←</button>
           <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0, flex: 1 }}>제보 상세</h2>
         </header>
 
         <main style={{ flex: 1, overflowY: 'auto' }}>
-          {/* 사진 */}
           {selectedPost.image_url && (
             <img src={selectedPost.image_url} alt={selectedPost.title} style={{ width: '100%', height: '280px', objectFit: 'cover' }} />
           )}
 
           <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* 제목 & 태그 */}
             <div>
               <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#222', margin: '0 0 8px' }}>{selectedPost.title}</h3>
-              {selectedPost.tags && (
-                <p style={{ fontSize: '13px', color: '#FF6B6B', margin: 0 }}>{selectedPost.tags}</p>
-              )}
+              {selectedPost.tags && <p style={{ fontSize: '13px', color: '#FF6B6B', margin: 0 }}>{selectedPost.tags}</p>}
+            </div>
+
+            {/* 조회수 + 좋아요 + 댓글수 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '12px', color: '#bbb' }}>👁️ {viewCount}</span>
+              <span style={{ fontSize: '12px', color: '#bbb' }}>❤️ {likeCount}</span>
+              <span style={{ fontSize: '12px', color: '#bbb' }}>💬 {comments.length}</span>
             </div>
 
             {/* 제보자 & 시간 */}
@@ -206,23 +320,63 @@ export default function Home() {
 
             {/* 위치 */}
             {selectedPost.location && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '16px' }}>📍</span>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: 0 }}>{selectedPost.location}</p>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', backgroundColor: '#fafafa', borderRadius: '12px' }}>
+                <span style={{ fontSize: '18px' }}>📍</span>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: 0 }}>{selectedPost.location}</p>
               </div>
             )}
 
-            {/* 확인했어요 버튼 */}
-            <button style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#FFF5F5', color: '#FF6B6B', border: '1.5px solid #FF6B6B', cursor: 'pointer', fontSize: '15px', fontWeight: '700' }}>
-              ✅ 나도 확인했어요!
+            {/* 좋아요 버튼 */}
+            <button
+              onClick={handleLike}
+              disabled={likeLoading}
+              style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: myLiked ? '#FF6B6B' : '#FFF5F5', color: myLiked ? '#fff' : '#FF6B6B', border: '1.5px solid #FF6B6B', cursor: 'pointer', fontSize: '15px', fontWeight: '700', transition: 'all 0.2s' }}
+            >
+              {myLiked ? '❤️ 좋아요!' : '🤍 좋아요'} {likeCount > 0 && `(${likeCount})`}
             </button>
 
-            {/* 정보 수정 요청 */}
-            <button style={{ width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: '#fafafa', color: '#aaa', border: '1px solid #f0f0f0', cursor: 'pointer', fontSize: '13px' }}>
-              🚨 정보가 잘못됐어요
-            </button>
+            {/* 댓글 */}
+            <div>
+              <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#222', margin: '0 0 12px' }}>
+                댓글 {comments.length > 0 && `(${comments.length})`}
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+                {comments.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: '#bbb', textAlign: 'center', padding: '20px 0' }}>첫 번째 댓글을 남겨보세요 😊</p>
+                ) : (
+                  comments.map(comment => (
+                    <div key={comment.id} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#888', flexShrink: 0 }}>
+                        {(comment.nickname ?? '익')[0]}
+                      </div>
+                      <div style={{ flex: 1, backgroundColor: '#fafafa', borderRadius: '10px', padding: '8px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#444' }}>{comment.nickname ?? '익명'}</span>
+                          <span style={{ fontSize: '11px', color: '#bbb' }}>{timeAgo(comment.created_at)}</span>
+                        </div>
+                        <p style={{ fontSize: '13px', color: '#222', margin: 0, lineHeight: '1.5' }}>{comment.content}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder={user ? '댓글을 입력하세요...' : '로그인 후 댓글을 남길 수 있어요'}
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleComment()}
+                  style={{ flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #f0f0f0', fontSize: '13px', outline: 'none', backgroundColor: '#fafafa' }}
+                />
+                <button
+                  onClick={handleComment}
+                  disabled={!newComment.trim() || commentLoading}
+                  style={{ padding: '10px 16px', borderRadius: '10px', backgroundColor: newComment.trim() ? '#FF6B6B' : '#f0f0f0', color: newComment.trim() ? '#fff' : '#ccc', border: 'none', cursor: newComment.trim() ? 'pointer' : 'default', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap' }}
+                >등록</button>
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -242,7 +396,6 @@ export default function Home() {
         </header>
 
         <main style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* 사진 */}
           <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>사진 <span style={{ color: '#FF6B6B' }}>*</span></label>
             <div onClick={() => fileInputRef.current?.click()} style={{ width: '100%', height: '200px', borderRadius: '16px', border: errors.image ? '2px dashed #FF6B6B' : imagePreview ? 'none' : '2px dashed #f0f0f0', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}>
@@ -264,14 +417,12 @@ export default function Home() {
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
           </div>
 
-          {/* 뭐가 있어요 */}
           <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>뭐가 있어요? <span style={{ color: '#FF6B6B' }}>*</span></label>
             <input type="text" placeholder="예) 피카츄 인형, 산리오 가챠" value={title} onChange={(e) => { setTitle(e.target.value); setErrors(prev => ({ ...prev, title: undefined })) }} style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.title ? '#FF6B6B' : title ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }} />
             {errors.title && <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.title}</p>}
           </div>
 
-          {/* 업체 위치 */}
           <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>업체 위치 <span style={{ color: '#FF6B6B' }}>*</span></label>
             {location ? (
@@ -288,7 +439,6 @@ export default function Home() {
             {errors.location && <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.location}</p>}
           </div>
 
-          {/* 태그 */}
           <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>태그 <span style={{ fontSize: '11px', color: '#aaa', fontWeight: '400' }}>선택</span></label>
             <input type="text" placeholder="#피카츄 #포켓몬" value={tags} onChange={(e) => setTags(e.target.value)} style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1.5px solid #f0f0f0', fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }} />
@@ -339,8 +489,11 @@ export default function Home() {
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: '0 0 4px' }}>{item.title}</p>
                 {item.location && <p style={{ fontSize: '12px', color: '#888', margin: '0 0 2px' }}>📍 {item.location}</p>}
                 {item.tags && <p style={{ fontSize: '11px', color: '#FF6B6B', margin: '0 0 2px' }}>{item.tags}</p>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <p style={{ fontSize: '11px', color: '#bbb', margin: 0 }}>{item.nickname ?? '익명'} · {timeAgo(item.created_at)}</p>
+                  <span style={{ fontSize: '11px', color: '#bbb' }}>👁️ {item.view_count ?? 0}</span>
+                  <span style={{ fontSize: '11px', color: '#bbb' }}>❤️ {item.like_count ?? 0}</span>
+                  <span style={{ fontSize: '11px', color: '#bbb' }}>💬 {item.comment_count ?? 0}</span>
                 </div>
               </div>
             </div>
