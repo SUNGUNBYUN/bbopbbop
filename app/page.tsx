@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import KakaoPlaceSearch from './KakaoMap'
 
 type Post = {
   id: string
@@ -17,12 +18,22 @@ type Errors = {
   location?: string
 }
 
+type Place = {
+  place_name: string
+  address_name: string
+  road_address_name: string
+  x: string
+  y: string
+}
+
 export default function Home() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showMapSearch, setShowMapSearch] = useState(false)
   const [activeTab, setActiveTab] = useState(0)
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
+  const [locationDetail, setLocationDetail] = useState('')
   const [tags, setTags] = useState('')
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,6 +70,13 @@ export default function Home() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  function handlePlaceSelect(place: Place) {
+    setLocation(place.place_name)
+    setLocationDetail(place.road_address_name || place.address_name)
+    setShowMapSearch(false)
+    setErrors(prev => ({ ...prev, location: undefined }))
+  }
+
   function validate() {
     const newErrors: Errors = {}
     if (!imageFile) newErrors.image = '사진을 추가해주세요'
@@ -73,7 +91,6 @@ export default function Home() {
     setUploading(true)
 
     let image_url = null
-
     if (imageFile) {
       const fileName = `${Date.now()}_${imageFile.name}`
       const { data, error } = await supabase.storage
@@ -87,13 +104,15 @@ export default function Home() {
       }
     }
 
+    const fullLocation = locationDetail ? `${location} (${locationDetail})` : location
     const { error } = await supabase
       .from('posts')
-      .insert({ title, location, tags, image_url })
+      .insert({ title, location: fullLocation, tags, image_url })
 
     if (!error) {
       setTitle('')
       setLocation('')
+      setLocationDetail('')
       setTags('')
       setImageFile(null)
       setImagePreview(null)
@@ -120,7 +139,7 @@ export default function Home() {
     return (
       <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
         <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={() => { setShowForm(false); setImagePreview(null); setImageFile(null); setErrors({}) }} style={{ fontSize: '14px', color: '#888', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
+          <button onClick={() => { setShowForm(false); setImagePreview(null); setImageFile(null); setErrors({}); setLocation(''); setLocationDetail('') }} style={{ fontSize: '14px', color: '#888', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
           <h2 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>제보하기</h2>
           <button
             onClick={handleSubmit}
@@ -145,10 +164,7 @@ export default function Home() {
               {imagePreview ? (
                 <>
                   <img src={imagePreview} alt="미리보기" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button
-                    onClick={handleImageRemove}
-                    style={{ position: 'absolute', top: '8px', right: '8px', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '14px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >✕</button>
+                  <button onClick={handleImageRemove} style={{ position: 'absolute', top: '8px', right: '8px', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '14px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                   <div style={{ position: 'absolute', bottom: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: '11px', padding: '4px 8px', borderRadius: '8px' }}>탭해서 변경</div>
                 </>
               ) : (
@@ -159,9 +175,7 @@ export default function Home() {
                 </>
               )}
             </div>
-            {errors.image && (
-              <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.image}</p>
-            )}
+            {errors.image && <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.image}</p>}
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
           </div>
 
@@ -177,9 +191,7 @@ export default function Home() {
               onChange={(e) => { setTitle(e.target.value); setErrors(prev => ({ ...prev, title: undefined })) }}
               style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.title ? '#FF6B6B' : title ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }}
             />
-            {errors.title && (
-              <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.title}</p>
-            )}
+            {errors.title && <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.title}</p>}
           </div>
 
           {/* 업체 위치 */}
@@ -187,16 +199,27 @@ export default function Home() {
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '6px' }}>
               업체 위치 <span style={{ color: '#FF6B6B' }}>*</span>
             </label>
-            <input
-              type="text"
-              placeholder="예) 홍대 뽑기왕 2층"
-              value={location}
-              onChange={(e) => { setLocation(e.target.value); setErrors(prev => ({ ...prev, location: undefined })) }}
-              style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.location ? '#FF6B6B' : location ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box' }}
-            />
-            {errors.location && (
-              <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.location}</p>
+
+            {location ? (
+              /* 선택된 업체 표시 */
+              <div style={{ padding: '12px 14px', borderRadius: '10px', border: '1.5px solid #FF6B6B', backgroundColor: '#FFF5F5', position: 'relative' }}>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: '0 0 2px', paddingRight: '32px' }}>{location}</p>
+                {locationDetail && <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>{locationDetail}</p>}
+                <button
+                  onClick={() => { setLocation(''); setLocationDetail('') }}
+                  style={{ position: 'absolute', top: '10px', right: '10px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#f0f0f0', color: '#888', fontSize: '12px', border: 'none', cursor: 'pointer' }}
+                >✕</button>
+              </div>
+            ) : (
+              /* 검색 버튼 */
+              <button
+                onClick={() => setShowMapSearch(true)}
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.location ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', backgroundColor: '#fafafa', cursor: 'pointer', textAlign: 'left', color: '#aaa', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <span>🔍</span> 업체명으로 검색하기
+              </button>
             )}
+            {errors.location && <p style={{ fontSize: '12px', color: '#FF6B6B', margin: '6px 0 0' }}>⚠ {errors.location}</p>}
           </div>
 
           {/* 태그 */}
@@ -214,6 +237,14 @@ export default function Home() {
           </div>
 
         </main>
+
+        {/* 카카오맵 검색 팝업 */}
+        {showMapSearch && (
+          <KakaoPlaceSearch
+            onSelect={handlePlaceSelect}
+            onClose={() => setShowMapSearch(false)}
+          />
+        )}
       </div>
     )
   }
