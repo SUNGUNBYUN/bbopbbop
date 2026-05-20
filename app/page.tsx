@@ -131,7 +131,7 @@ export default function Home() {
       .eq('post_id', postId)
     if (likesData) {
       setLikeCount(likesData.length)
-      if (user) setMyLiked(likesData.some(l => l.user_id === user.id))
+      if (user) setMyLiked(likesData.some((l: any) => l.user_id === user.id))
     }
 
     // 댓글
@@ -219,25 +219,42 @@ export default function Home() {
   }
 
   async function handleLike() {
-    if (!user) { setShowAuth(true); return }
-    if (!selectedPost) return
-    setLikeLoading(true)
+  if (!user) { setShowAuth(true); return }
+  if (!selectedPost) return
+  setLikeLoading(true)
 
-    if (myLiked) {
-      await supabase.from('likes').delete()
-        .eq('post_id', selectedPost.id)
-        .eq('user_id', user.id)
-      setMyLiked(false)
-      setLikeCount(prev => prev - 1)
-    } else {
-      const { error } = await supabase.from('likes').insert({
-        post_id: selectedPost.id,
-        user_id: user.id
-      })
-      if (!error) { setMyLiked(true); setLikeCount(prev => prev + 1) }
+  if (myLiked) {
+    const { error: deleteError } = await supabase.from('likes').delete()
+      .eq('post_id', selectedPost.id)
+      .eq('user_id', user.id)
+    console.log('likes delete error:', deleteError)
+    
+    const { error: updateError } = await supabase.from('posts')
+      .update({ like_count: likeCount - 1 })
+      .eq('id', selectedPost.id)
+    console.log('posts update error:', updateError)
+    
+    setMyLiked(false)
+    setLikeCount(prev => prev - 1)
+  } else {
+    const { error } = await supabase.from('likes').insert({
+      post_id: selectedPost.id,
+      user_id: user.id
+    })
+    console.log('likes insert error:', error)
+    
+    if (!error) {
+      const { error: updateError } = await supabase.from('posts')
+        .update({ like_count: likeCount + 1 })
+        .eq('id', selectedPost.id)
+      console.log('posts update error:', updateError)
+      
+      setMyLiked(true)
+      setLikeCount(prev => prev + 1)
     }
-    setLikeLoading(false)
   }
+  setLikeLoading(false)
+}
 
   async function handleComment() {
     if (!user) { setShowAuth(true); return }
@@ -252,20 +269,26 @@ export default function Home() {
     })
 
     if (!error) {
-      setNewComment('')
       const { data } = await supabase
         .from('comments')
         .select('*')
         .eq('post_id', selectedPost.id)
         .order('created_at', { ascending: true })
-      if (data) setComments(data)
+      if (data) {
+        setComments(data)
+        // posts 테이블 직접 업데이트
+        await supabase.from('posts')
+          .update({ comment_count: data.length })
+          .eq('id', selectedPost.id)
+      }
+      setNewComment('')
     }
     setCommentLoading(false)
   }
 
   async function handleBack() {
     setSelectedPost(null)
-    setTimeout(() => fetchPosts(), 500)
+    setTimeout(() => fetchPosts(), 800)
   }
 
   function timeAgo(dateStr: string) {
