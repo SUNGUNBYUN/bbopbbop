@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import KakaoPlaceSearch from './KakaoMap'
 import Auth from './Auth'
 import MapTab from './MapTab'
+import MarketTab from './MarketTab'
 
 type Post = {
   id: string
@@ -204,9 +205,7 @@ export default function Home() {
     const { error } = await supabase.from('posts').insert({
       title, location: fullLocation, tags, image_url,
       user_id: user.id, nickname: user.nickname,
-      latitude: locationLat,
-      longitude: locationLng,
-      place_name: locationPlaceName,
+      latitude: locationLat, longitude: locationLng, place_name: locationPlaceName,
     })
 
     if (!error) {
@@ -464,14 +463,12 @@ export default function Home() {
         )}
       </header>
 
-      {/* 검색창 - 검색 탭일 때만 */}
       {activeTab === 0 && (
         <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
           <input type="text" placeholder="🔍  인형 이름, 업체명으로 검색" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1.5px solid #f0f0f0', backgroundColor: '#fafafa', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
         </div>
       )}
 
-      {/* 탭 콘텐츠 */}
       {activeTab === 0 ? (
         <main style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {loading ? (
@@ -507,13 +504,14 @@ export default function Home() {
         </main>
       ) : activeTab === 1 ? (
         <MapTab onSelectPost={(post) => setSelectedPost(post as Post)} />
+      ) : activeTab === 2 ? (
+        <MarketTab user={user} onRequireAuth={() => setShowAuth(true)} />
       ) : (
         <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <p style={{ color: '#bbb', fontSize: '14px' }}>준비 중이에요 🛠️</p>
         </main>
       )}
 
-      {/* 플로팅 버튼 - 검색 탭일 때만 */}
       {activeTab === 0 && (
         <button onClick={() => { if (!user) { setShowAuth(true); return }; setShowForm(true) }} style={{ position: 'fixed', bottom: '72px', right: 'calc(50% - 215px + 20px)', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#FF6B6B', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.4)' }}>+</button>
       )}
