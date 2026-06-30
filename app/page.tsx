@@ -5,6 +5,7 @@ import KakaoPlaceSearch from './KakaoMap'
 import Auth from './Auth'
 import MapTab from './MapTab'
 import MarketTab from './MarketTab'
+import FeedTab from './FeedTab'
 
 type Post = {
   id: string
@@ -284,7 +285,6 @@ export default function Home() {
     p.title.includes(search) || (p.location ?? '').includes(search)
   )
 
-  // 제보 상세 화면
   if (selectedPost) {
     return (
       <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
@@ -382,7 +382,6 @@ export default function Home() {
     )
   }
 
-  // 제보하기 폼
   if (showForm) {
     return (
       <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
@@ -506,11 +505,9 @@ export default function Home() {
         <MapTab onSelectPost={(post) => setSelectedPost(post as Post)} />
       ) : activeTab === 2 ? (
         <MarketTab user={user} onRequireAuth={() => setShowAuth(true)} />
-      ) : (
-        <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <p style={{ color: '#bbb', fontSize: '14px' }}>준비 중이에요 🛠️</p>
-        </main>
-      )}
+      ) : activeTab === 3 ? (
+        <FeedTab user={user} onRequireAuth={() => setShowAuth(true)} />
+      ) : null}
 
       {activeTab === 0 && (
         <button onClick={() => { if (!user) { setShowAuth(true); return }; setShowForm(true) }} style={{ position: 'fixed', bottom: '72px', right: 'calc(50% - 215px + 20px)', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#FF6B6B', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.4)' }}>+</button>
