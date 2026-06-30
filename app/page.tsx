@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import KakaoPlaceSearch from './KakaoMap'
 import Auth from './Auth'
+import MapTab from './MapTab'
 
 type Post = {
   id: string
@@ -16,6 +17,9 @@ type Post = {
   view_count: number
   like_count: number
   comment_count: number
+  latitude: number | null
+  longitude: number | null
+  place_name: string | null
 }
 
 type Comment = {
@@ -56,6 +60,9 @@ export default function Home() {
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
   const [locationDetail, setLocationDetail] = useState('')
+  const [locationLat, setLocationLat] = useState<number | null>(null)
+  const [locationLng, setLocationLng] = useState<number | null>(null)
+  const [locationPlaceName, setLocationPlaceName] = useState('')
   const [tags, setTags] = useState('')
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,36 +116,24 @@ export default function Home() {
   }, [selectedPost?.id])
 
   async function fetchPostDetail(postId: string) {
-    // 조회수 증가
     await supabase.rpc('increment_view_count', { post_id: postId })
 
-    // 최신 post 데이터
     const { data: postData } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('id', postId)
-      .single()
-
+      .from('posts').select('*').eq('id', postId).single()
     if (postData) {
       setViewCount(postData.view_count ?? 0)
       setLikeCount(postData.like_count ?? 0)
     }
 
-    // 좋아요 여부 확인
     const { data: likesData } = await supabase
-      .from('likes')
-      .select('*')
-      .eq('post_id', postId)
+      .from('likes').select('*').eq('post_id', postId)
     if (likesData) {
       setLikeCount(likesData.length)
       if (user) setMyLiked(likesData.some((l: any) => l.user_id === user.id))
     }
 
-    // 댓글
     const { data: commentsData } = await supabase
-      .from('comments')
-      .select('*')
-      .eq('post_id', postId)
+      .from('comments').select('*').eq('post_id', postId)
       .order('created_at', { ascending: true })
     if (commentsData) setComments(commentsData)
   }
@@ -146,9 +141,7 @@ export default function Home() {
   async function fetchPosts() {
     setLoading(true)
     const { data } = await supabase
-      .from('posts')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .from('posts').select('*').order('created_at', { ascending: false })
     if (data) setPosts(data)
     setLoading(false)
   }
@@ -176,6 +169,9 @@ export default function Home() {
   function handlePlaceSelect(place: Place) {
     setLocation(place.place_name)
     setLocationDetail(place.road_address_name || place.address_name)
+    setLocationLat(parseFloat(place.y))
+    setLocationLng(parseFloat(place.x))
+    setLocationPlaceName(place.place_name)
     setShowMapSearch(false)
     setErrors(prev => ({ ...prev, location: undefined }))
   }
@@ -207,11 +203,15 @@ export default function Home() {
     const fullLocation = locationDetail ? `${location} (${locationDetail})` : location
     const { error } = await supabase.from('posts').insert({
       title, location: fullLocation, tags, image_url,
-      user_id: user.id, nickname: user.nickname
+      user_id: user.id, nickname: user.nickname,
+      latitude: locationLat,
+      longitude: locationLng,
+      place_name: locationPlaceName,
     })
 
     if (!error) {
       setTitle(''); setLocation(''); setLocationDetail(''); setTags('')
+      setLocationLat(null); setLocationLng(null); setLocationPlaceName('')
       setImageFile(null); setImagePreview(null); setErrors({})
       setShowForm(false); fetchPosts()
     }
@@ -219,42 +219,30 @@ export default function Home() {
   }
 
   async function handleLike() {
-  if (!user) { setShowAuth(true); return }
-  if (!selectedPost) return
-  setLikeLoading(true)
+    if (!user) { setShowAuth(true); return }
+    if (!selectedPost) return
+    setLikeLoading(true)
 
-  if (myLiked) {
-    const { error: deleteError } = await supabase.from('likes').delete()
-      .eq('post_id', selectedPost.id)
-      .eq('user_id', user.id)
-    console.log('likes delete error:', deleteError)
-    
-    const { error: updateError } = await supabase.from('posts')
-      .update({ like_count: likeCount - 1 })
-      .eq('id', selectedPost.id)
-    console.log('posts update error:', updateError)
-    
-    setMyLiked(false)
-    setLikeCount(prev => prev - 1)
-  } else {
-    const { error } = await supabase.from('likes').insert({
-      post_id: selectedPost.id,
-      user_id: user.id
-    })
-    console.log('likes insert error:', error)
-    
-    if (!error) {
-      const { error: updateError } = await supabase.from('posts')
-        .update({ like_count: likeCount + 1 })
-        .eq('id', selectedPost.id)
-      console.log('posts update error:', updateError)
-      
-      setMyLiked(true)
-      setLikeCount(prev => prev + 1)
+    if (myLiked) {
+      await supabase.from('likes').delete()
+        .eq('post_id', selectedPost.id).eq('user_id', user.id)
+      const newCount = likeCount - 1
+      await supabase.from('posts').update({ like_count: newCount }).eq('id', selectedPost.id)
+      setMyLiked(false)
+      setLikeCount(newCount)
+    } else {
+      const { error } = await supabase.from('likes').insert({
+        post_id: selectedPost.id, user_id: user.id
+      })
+      if (!error) {
+        const newCount = likeCount + 1
+        await supabase.from('posts').update({ like_count: newCount }).eq('id', selectedPost.id)
+        setMyLiked(true)
+        setLikeCount(newCount)
+      }
     }
+    setLikeLoading(false)
   }
-  setLikeLoading(false)
-}
 
   async function handleComment() {
     if (!user) { setShowAuth(true); return }
@@ -262,24 +250,18 @@ export default function Home() {
     setCommentLoading(true)
 
     const { error } = await supabase.from('comments').insert({
-      post_id: selectedPost.id,
-      user_id: user.id,
-      nickname: user.nickname,
-      content: newComment.trim()
+      post_id: selectedPost.id, user_id: user.id,
+      nickname: user.nickname, content: newComment.trim()
     })
 
     if (!error) {
       const { data } = await supabase
-        .from('comments')
-        .select('*')
-        .eq('post_id', selectedPost.id)
+        .from('comments').select('*').eq('post_id', selectedPost.id)
         .order('created_at', { ascending: true })
       if (data) {
         setComments(data)
-        // posts 테이블 직접 업데이트
         await supabase.from('posts')
-          .update({ comment_count: data.length })
-          .eq('id', selectedPost.id)
+          .update({ comment_count: data.length }).eq('id', selectedPost.id)
       }
       setNewComment('')
     }
@@ -323,14 +305,12 @@ export default function Home() {
               {selectedPost.tags && <p style={{ fontSize: '13px', color: '#FF6B6B', margin: 0 }}>{selectedPost.tags}</p>}
             </div>
 
-            {/* 조회수 + 좋아요 + 댓글수 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{ fontSize: '12px', color: '#bbb' }}>👁️ {viewCount}</span>
               <span style={{ fontSize: '12px', color: '#bbb' }}>❤️ {likeCount}</span>
               <span style={{ fontSize: '12px', color: '#bbb' }}>💬 {comments.length}</span>
             </div>
 
-            {/* 제보자 & 시간 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', backgroundColor: '#fafafa', borderRadius: '12px' }}>
               <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#FF6B6B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: '700', flexShrink: 0 }}>
                 {(selectedPost.nickname ?? '익명')[0]}
@@ -341,7 +321,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 위치 */}
             {selectedPost.location && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', backgroundColor: '#fafafa', borderRadius: '12px' }}>
                 <span style={{ fontSize: '18px' }}>📍</span>
@@ -349,7 +328,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* 좋아요 버튼 */}
             <button
               onClick={handleLike}
               disabled={likeLoading}
@@ -358,7 +336,6 @@ export default function Home() {
               {myLiked ? '❤️ 좋아요!' : '🤍 좋아요'} {likeCount > 0 && `(${likeCount})`}
             </button>
 
-            {/* 댓글 */}
             <div>
               <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#222', margin: '0 0 12px' }}>
                 댓글 {comments.length > 0 && `(${comments.length})`}
@@ -452,7 +429,7 @@ export default function Home() {
               <div style={{ padding: '12px 14px', borderRadius: '10px', border: '1.5px solid #FF6B6B', backgroundColor: '#FFF5F5', position: 'relative' }}>
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: '0 0 2px', paddingRight: '32px' }}>{location}</p>
                 {locationDetail && <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>{locationDetail}</p>}
-                <button onClick={() => { setLocation(''); setLocationDetail('') }} style={{ position: 'absolute', top: '10px', right: '10px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#f0f0f0', color: '#888', fontSize: '12px', border: 'none', cursor: 'pointer' }}>✕</button>
+                <button onClick={() => { setLocation(''); setLocationDetail(''); setLocationLat(null); setLocationLng(null); setLocationPlaceName('') }} style={{ position: 'absolute', top: '10px', right: '10px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#f0f0f0', color: '#888', fontSize: '12px', border: 'none', cursor: 'pointer' }}>✕</button>
               </div>
             ) : (
               <button onClick={() => setShowMapSearch(true)} style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: `1.5px solid ${errors.location ? '#FF6B6B' : '#f0f0f0'}`, fontSize: '14px', backgroundColor: '#fafafa', cursor: 'pointer', textAlign: 'left', color: '#aaa', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -475,7 +452,7 @@ export default function Home() {
 
   return (
     <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
-      <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#FF6B6B', margin: 0 }}>🧸 뽑뽑</h1>
         {user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -487,46 +464,61 @@ export default function Home() {
         )}
       </header>
 
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0' }}>
-        <input type="text" placeholder="🔍  인형 이름, 업체명으로 검색" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1.5px solid #f0f0f0', backgroundColor: '#fafafa', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
-      </div>
+      {/* 검색창 - 검색 탭일 때만 */}
+      {activeTab === 0 && (
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+          <input type="text" placeholder="🔍  인형 이름, 업체명으로 검색" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1.5px solid #f0f0f0', backgroundColor: '#fafafa', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+      )}
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {loading ? (
-          <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px' }}>불러오는 중... 🔄</p>
-        ) : filtered.length === 0 ? (
-          <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px' }}>
-            {search ? '검색 결과가 없어요 😢' : '아직 제보가 없어요. 첫 번째로 제보해보세요! 🎯'}
-          </p>
-        ) : (
-          filtered.map(item => (
-            <div key={item.id} onClick={() => setSelectedPost(item)} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', borderRadius: '12px', border: '1px solid #f0f0f0', cursor: 'pointer' }}>
-              <div style={{ width: '64px', height: '64px', borderRadius: '12px', backgroundColor: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
-                {item.image_url ? (
-                  <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span style={{ fontSize: '28px' }}>🧸</span>
-                )}
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: '0 0 4px' }}>{item.title}</p>
-                {item.location && <p style={{ fontSize: '12px', color: '#888', margin: '0 0 2px' }}>📍 {item.location}</p>}
-                {item.tags && <p style={{ fontSize: '11px', color: '#FF6B6B', margin: '0 0 2px' }}>{item.tags}</p>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <p style={{ fontSize: '11px', color: '#bbb', margin: 0 }}>{item.nickname ?? '익명'} · {timeAgo(item.created_at)}</p>
-                  <span style={{ fontSize: '11px', color: '#bbb' }}>👁️ {item.view_count ?? 0}</span>
-                  <span style={{ fontSize: '11px', color: '#bbb' }}>❤️ {item.like_count ?? 0}</span>
-                  <span style={{ fontSize: '11px', color: '#bbb' }}>💬 {item.comment_count ?? 0}</span>
+      {/* 탭 콘텐츠 */}
+      {activeTab === 0 ? (
+        <main style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {loading ? (
+            <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px' }}>불러오는 중... 🔄</p>
+          ) : filtered.length === 0 ? (
+            <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px' }}>
+              {search ? '검색 결과가 없어요 😢' : '아직 제보가 없어요. 첫 번째로 제보해보세요! 🎯'}
+            </p>
+          ) : (
+            filtered.map(item => (
+              <div key={item.id} onClick={() => setSelectedPost(item)} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', borderRadius: '12px', border: '1px solid #f0f0f0', cursor: 'pointer' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '12px', backgroundColor: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '28px' }}>🧸</span>
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: '0 0 4px' }}>{item.title}</p>
+                  {item.location && <p style={{ fontSize: '12px', color: '#888', margin: '0 0 2px' }}>📍 {item.location}</p>}
+                  {item.tags && <p style={{ fontSize: '11px', color: '#FF6B6B', margin: '0 0 2px' }}>{item.tags}</p>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <p style={{ fontSize: '11px', color: '#bbb', margin: 0 }}>{item.nickname ?? '익명'} · {timeAgo(item.created_at)}</p>
+                    <span style={{ fontSize: '11px', color: '#bbb' }}>👁️ {item.view_count ?? 0}</span>
+                    <span style={{ fontSize: '11px', color: '#bbb' }}>❤️ {item.like_count ?? 0}</span>
+                    <span style={{ fontSize: '11px', color: '#bbb' }}>💬 {item.comment_count ?? 0}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
-        )}
-      </main>
+            ))
+          )}
+        </main>
+      ) : activeTab === 1 ? (
+        <MapTab onSelectPost={(post) => setSelectedPost(post as Post)} />
+      ) : (
+        <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ color: '#bbb', fontSize: '14px' }}>준비 중이에요 🛠️</p>
+        </main>
+      )}
 
-      <button onClick={() => { if (!user) { setShowAuth(true); return }; setShowForm(true) }} style={{ position: 'fixed', bottom: '72px', right: 'calc(50% - 215px + 20px)', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#FF6B6B', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.4)' }}>+</button>
+      {/* 플로팅 버튼 - 검색 탭일 때만 */}
+      {activeTab === 0 && (
+        <button onClick={() => { if (!user) { setShowAuth(true); return }; setShowForm(true) }} style={{ position: 'fixed', bottom: '72px', right: 'calc(50% - 215px + 20px)', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#FF6B6B', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.4)' }}>+</button>
+      )}
 
-      <nav style={{ borderTop: '1px solid #f0f0f0', display: 'flex', backgroundColor: '#fff' }}>
+      <nav style={{ borderTop: '1px solid #f0f0f0', display: 'flex', backgroundColor: '#fff', flexShrink: 0 }}>
         {[{ icon: '🔍', label: '검색' }, { icon: '🗺️', label: '지도' }, { icon: '🛍️', label: '마켓' }, { icon: '📸', label: '피드' }].map((item, i) => (
           <button key={item.label} onClick={() => setActiveTab(i)} style={{ flex: 1, padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', background: 'none', border: 'none', cursor: 'pointer' }}>
             <span style={{ fontSize: '20px' }}>{item.icon}</span>
