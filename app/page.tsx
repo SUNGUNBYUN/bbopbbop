@@ -6,6 +6,7 @@ import Auth from './Auth'
 import MapTab from './MapTab'
 import MarketTab from './MarketTab'
 import FeedTab from './FeedTab'
+import ChatList from './ChatList'
 
 type Post = {
   id: string
@@ -58,6 +59,8 @@ export default function Home() {
   const [showForm, setShowForm] = useState(false)
   const [showMapSearch, setShowMapSearch] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+  const [chatRoomId, setChatRoomId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState(0)
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
@@ -268,6 +271,40 @@ export default function Home() {
     setCommentLoading(false)
   }
 
+  async function startChat() {
+    if (!user) { setShowAuth(true); return }
+    if (!selectedPost || !selectedPost.user_id) return
+    if (selectedPost.user_id === user.id) return
+
+    // 기존 채팅방 찾기
+    const { data: existing } = await supabase
+      .from('chat_rooms')
+      .select('*')
+      .or(`and(user1_id.eq.${user.id},user2_id.eq.${selectedPost.user_id}),and(user1_id.eq.${selectedPost.user_id},user2_id.eq.${user.id})`)
+      .limit(1)
+
+    if (existing && existing.length > 0) {
+      setChatRoomId(existing[0].id)
+      setShowChat(true)
+      return
+    }
+
+    // 새 채팅방 생성
+    const { data: newRoom, error } = await supabase.from('chat_rooms').insert({
+      user1_id: user.id,
+      user2_id: selectedPost.user_id,
+      user1_nickname: user.nickname,
+      user2_nickname: selectedPost.nickname,
+      post_id: selectedPost.id,
+      post_title: selectedPost.title,
+    }).select().single()
+
+    if (!error && newRoom) {
+      setChatRoomId(newRoom.id)
+      setShowChat(true)
+    }
+  }
+
   async function handleBack() {
     setSelectedPost(null)
     setTimeout(() => fetchPosts(), 800)
@@ -286,11 +323,16 @@ export default function Home() {
   )
 
   if (selectedPost) {
+    const isMine = user?.id === selectedPost.user_id
+
     return (
       <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
         <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
           <button onClick={handleBack} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>←</button>
           <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0, flex: 1 }}>제보 상세</h2>
+          {user && (
+            <button onClick={() => { setChatRoomId(null); setShowChat(true) }} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer' }}>💬</button>
+          )}
         </header>
 
         <main style={{ flex: 1, overflowY: 'auto' }}>
@@ -314,10 +356,13 @@ export default function Home() {
               <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#FF6B6B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: '700', flexShrink: 0 }}>
                 {(selectedPost.nickname ?? '익명')[0]}
               </div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '13px', fontWeight: '600', color: '#222', margin: '0 0 2px' }}>{selectedPost.nickname ?? '익명'}</p>
                 <p style={{ fontSize: '11px', color: '#aaa', margin: 0 }}>{timeAgo(selectedPost.created_at)}</p>
               </div>
+              {!isMine && selectedPost.user_id && (
+                <button onClick={startChat} style={{ padding: '6px 14px', borderRadius: '20px', backgroundColor: '#FF6B6B', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>채팅하기</button>
+              )}
             </div>
 
             {selectedPost.location && (
@@ -378,6 +423,9 @@ export default function Home() {
             </div>
           </div>
         </main>
+
+        {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
+        {showAuth && <Auth onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
       </div>
     )
   }
@@ -452,14 +500,19 @@ export default function Home() {
     <div style={{ maxWidth: '430px', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
       <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#FF6B6B', margin: 0 }}>🧸 뽑뽑</h1>
-        {user ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '13px', color: '#888' }}>{user.nickname}</span>
-            <button onClick={handleLogout} style={{ fontSize: '12px', color: '#aaa', background: 'none', border: 'none', cursor: 'pointer' }}>로그아웃</button>
-          </div>
-        ) : (
-          <button onClick={() => setShowAuth(true)} style={{ fontSize: '13px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: '20px', backgroundColor: '#f5f5f5' }}>로그인</button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {user && (
+            <button onClick={() => { setChatRoomId(null); setShowChat(true) }} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer' }}>💬</button>
+          )}
+          {user ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '13px', color: '#888' }}>{user.nickname}</span>
+              <button onClick={handleLogout} style={{ fontSize: '12px', color: '#aaa', background: 'none', border: 'none', cursor: 'pointer' }}>로그아웃</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAuth(true)} style={{ fontSize: '13px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: '20px', backgroundColor: '#f5f5f5' }}>로그인</button>
+          )}
+        </div>
       </header>
 
       {activeTab === 0 && (
@@ -522,6 +575,7 @@ export default function Home() {
         ))}
       </nav>
 
+      {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
       {showAuth && <Auth onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
     </div>
   )
