@@ -1,26 +1,217 @@
 @import "tailwindcss";
 
+/* ============================================
+   뽑뽑 디자인 시스템 — "뽑기방의 유리 상자"
+   ============================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- Brand --- */
+  --coral: #FF5A5F;
+  --coral-dark: #E8464B;
+  --coral-soft: #FFF0F0;
+  --coral-tint: #FFE1E2;
+
+  /* --- Accents --- */
+  --mint: #3DD6C4;        /* "뽑았다!" 성공 */
+  --mint-soft: #E4FAF6;
+  --butter: #FFC93C;      /* 코인/네온 */
+  --butter-soft: #FFF6E0;
+  --plum: #2B2440;        /* 오락실 어둠 */
+
+  /* --- Ink (text) --- */
+  --ink: #1A1523;
+  --ink-2: #4A4458;
+  --ink-3: #8A8496;
+  --ink-4: #B8B3C2;
+
+  /* --- Surface --- */
+  --bg: #FBFAF8;
+  --surface: #FFFFFF;
+  --surface-2: #F7F5F2;
+  --surface-3: #EDEAE4;
+  --line: #ECE9E4;
+  --line-2: #E2DED8;
+
+  /* --- Semantic --- */
+  --success: #22B07D;
+  --warning: #F49719;
+  --danger: #E8464B;
+
+  /* --- Radius --- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-full: 999px;
+
+  /* --- Shadow (유리 진열장 느낌) --- */
+  --shadow-sm: 0 1px 3px rgba(26,21,35,0.06), 0 1px 2px rgba(26,21,35,0.04);
+  --shadow-md: 0 4px 16px rgba(26,21,35,0.08), 0 2px 6px rgba(26,21,35,0.04);
+  --shadow-lg: 0 12px 32px rgba(26,21,35,0.12), 0 4px 12px rgba(26,21,35,0.06);
+  --shadow-coral: 0 8px 24px rgba(255,90,95,0.32);
+  --shadow-glass: 0 8px 32px rgba(43,36,64,0.16), inset 0 1px 0 rgba(255,255,255,0.6);
+
+  /* --- Spacing scale --- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* --- Layout --- */
+  --app-max: 440px;
+  --header-h: 56px;
+  --nav-h: 64px;
+
+  /* --- Type --- */
+  --font-display: 'Gmarket Sans', var(--font-pretendard), system-ui, sans-serif;
+  --font-body: var(--font-pretendard), system-ui, -apple-system, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  padding: 0;
+  margin: 0;
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, textarea {
+  font-family: inherit;
+}
+
+/* 모바일 앱 컨테이너 — 데스크탑에선 가운데 폰 프레임 */
+.app-shell {
+  max-width: var(--app-max);
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: var(--bg);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 60px rgba(43,36,64,0.08);
+}
+
+/* ============================================
+   애니메이션
+   ============================================ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes popIn {
+  0% { transform: scale(0.92); opacity: 0; }
+  60% { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes clawDrop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.animate-fade { animation: fadeIn 0.3s ease; }
+.animate-slide-up { animation: slideUp 0.32s cubic-bezier(0.16,1,0.3,1); }
+.animate-pop { animation: popIn 0.34s cubic-bezier(0.16,1,0.3,1); }
+
+/* 스켈레톤 로딩 */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: var(--r-sm);
+}
+
+/* 스크롤바 감추기 */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 눌림 효과 */
+.pressable { transition: transform 0.12s ease; }
+.pressable:active { transform: scale(0.96); }
+
+/* 접근성 */
+:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================
+   데스크탑 — 폰 프레임 효과
+   ============================================ */
+@media (min-width: 480px) {
+  body {
+    background: var(--plum);
+    min-height: 100dvh;
+  }
+  .app-shell {
+    min-height: 100dvh;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 80px rgba(0,0,0,0.4);
+  }
+}
+
+/* ============================================
+   Safe area (아이폰 홈 바)
+   ============================================ */
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+nav {
+  padding-bottom: max(var(--safe-bottom), 0px);
+}
+
+/* ============================================
+   이미지 드래그 방지 (모바일 UX)
+   ============================================ */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* ============================================
+   포커스 스타일 개선
+   ============================================ */
+input:focus, textarea:focus {
+  outline: none;
 }

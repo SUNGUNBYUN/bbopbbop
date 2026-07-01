@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { notify } from '@/lib/social'
 
 type ChatRoom = {
   id: string
@@ -121,6 +122,12 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
         last_message_at: new Date().toISOString()
       }).eq('id', selectedRoom.id)
 
+      const otherId = selectedRoom.user1_id === user.id ? selectedRoom.user2_id : selectedRoom.user1_id
+      notify({
+        userId: otherId, actorId: user.id, actorNickname: user.nickname,
+        type: 'chat', targetTitle: selectedRoom.post_title ?? undefined,
+      })
+
       setNewMessage('')
     }
     setSending(false)
@@ -143,20 +150,20 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
     const otherName = getOtherNickname(selectedRoom)
 
     return (
-      <div style={{ position: 'fixed', inset: 0, backgroundColor: '#fff', zIndex: 200, display: 'flex', flexDirection: 'column', maxWidth: '430px', margin: '0 auto' }}>
-        <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-          <button onClick={() => { setSelectedRoom(null); fetchRooms() }} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>←</button>
+      <div style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--surface)', zIndex: 200, display: 'flex', flexDirection: 'column', maxWidth: '430px', margin: '0 auto' }}>
+        <header style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+          <button onClick={() => { setSelectedRoom(null); fetchRooms() }} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)' }}>←</button>
           <div style={{ flex: 1 }}>
             <h2 style={{ fontSize: '15px', fontWeight: '700', margin: 0 }}>{otherName}</h2>
             {selectedRoom.post_title && (
-              <p style={{ fontSize: '11px', color: '#aaa', margin: '2px 0 0' }}>📌 {selectedRoom.post_title}</p>
+              <p style={{ fontSize: '11px', color: 'var(--ink-4)', margin: '2px 0 0' }}>📌 {selectedRoom.post_title}</p>
             )}
           </div>
         </header>
 
-        <main style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#fafafa' }}>
+        <main style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: 'var(--surface-2)' }}>
           {messages.length === 0 ? (
-            <p style={{ color: '#bbb', textAlign: 'center', marginTop: '40px', fontSize: '13px' }}>첫 메시지를 보내보세요 👋</p>
+            <p style={{ color: 'var(--ink-4)', textAlign: 'center', marginTop: '40px', fontSize: '13px' }}>첫 메시지를 보내보세요 👋</p>
           ) : (
             messages.map(msg => {
               const isMine = msg.sender_id === user.id
@@ -164,12 +171,12 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
                 <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
                   <div style={{ maxWidth: '70%' }}>
                     {!isMine && (
-                      <p style={{ fontSize: '11px', color: '#888', margin: '0 0 3px 4px' }}>{msg.sender_nickname ?? '익명'}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--ink-3)', margin: '0 0 3px 4px' }}>{msg.sender_nickname ?? '익명'}</p>
                     )}
-                    <div style={{ padding: '10px 14px', borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', backgroundColor: isMine ? '#FF6B6B' : '#fff', color: isMine ? '#fff' : '#222', fontSize: '14px', lineHeight: '1.5', border: isMine ? 'none' : '1px solid #f0f0f0' }}>
+                    <div style={{ padding: '10px 14px', borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', backgroundColor: isMine ? 'var(--coral)' : 'var(--surface)', color: isMine ? 'var(--surface)' : 'var(--ink)', fontSize: '14px', lineHeight: '1.5', border: isMine ? 'none' : '1px solid var(--line)' }}>
                       {msg.content}
                     </div>
-                    <p style={{ fontSize: '10px', color: '#bbb', margin: '3px 4px 0', textAlign: isMine ? 'right' : 'left' }}>{timeAgo(msg.created_at)}</p>
+                    <p style={{ fontSize: '10px', color: 'var(--ink-4)', margin: '3px 4px 0', textAlign: isMine ? 'right' : 'left' }}>{timeAgo(msg.created_at)}</p>
                   </div>
                 </div>
               )
@@ -178,19 +185,19 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
           <div ref={messagesEndRef} />
         </main>
 
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #f0f0f0', display: 'flex', gap: '8px', backgroundColor: '#fff', flexShrink: 0 }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', gap: '8px', backgroundColor: 'var(--surface)', flexShrink: 0 }}>
           <input
             type="text"
             placeholder="메시지를 입력하세요..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            style={{ flex: 1, padding: '10px 14px', borderRadius: '20px', border: '1.5px solid #f0f0f0', fontSize: '14px', outline: 'none', backgroundColor: '#fafafa' }}
+            style={{ flex: 1, padding: '10px 14px', borderRadius: '20px', border: '1.5px solid var(--line)', fontSize: '14px', outline: 'none', backgroundColor: 'var(--surface-2)' }}
           />
           <button
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
-            style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: newMessage.trim() ? '#FF6B6B' : '#f0f0f0', color: newMessage.trim() ? '#fff' : '#ccc', border: 'none', cursor: newMessage.trim() ? 'pointer' : 'default', fontSize: '16px' }}
+            style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: newMessage.trim() ? 'var(--coral)' : 'var(--line)', color: newMessage.trim() ? 'var(--surface)' : 'var(--ink-4)', border: 'none', cursor: newMessage.trim() ? 'pointer' : 'default', fontSize: '16px' }}
           >↑</button>
         </div>
       </div>
@@ -199,17 +206,17 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
 
   // 채팅방 목록
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#fff', zIndex: 200, display: 'flex', flexDirection: 'column', maxWidth: '430px', margin: '0 auto' }}>
-      <header style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-        <button onClick={onClose} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>←</button>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--surface)', zIndex: 200, display: 'flex', flexDirection: 'column', maxWidth: '430px', margin: '0 auto' }}>
+      <header style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)' }}>←</button>
         <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>채팅</h2>
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
         {loading ? (
-          <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px' }}>불러오는 중... 🔄</p>
+          <p style={{ color: 'var(--ink-4)', textAlign: 'center', marginTop: '40px' }}>불러오는 중... 🔄</p>
         ) : rooms.length === 0 ? (
-          <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px', fontSize: '13px' }}>
+          <p style={{ color: 'var(--ink-4)', textAlign: 'center', marginTop: '40px', fontSize: '13px' }}>
             아직 채팅이 없어요 💬<br />
             <span style={{ fontSize: '12px' }}>제보 상세에서 채팅을 시작해보세요!</span>
           </p>
@@ -221,20 +228,20 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
                 <div
                   key={room.id}
                   onClick={() => openRoom(room)}
-                  style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '14px', borderRadius: '12px', border: '1px solid #f0f0f0', cursor: 'pointer' }}
+                  style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '14px', borderRadius: '12px', border: '1px solid var(--line)', cursor: 'pointer' }}
                 >
-                  <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#FF6B6B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '16px', fontWeight: '700', flexShrink: 0 }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: 'var(--coral)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--surface)', fontSize: '16px', fontWeight: '700', flexShrink: 0 }}>
                     {otherName[0]}
                   </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#222', margin: 0 }}>{otherName}</p>
-                      <span style={{ fontSize: '11px', color: '#bbb' }}>{timeAgo(room.last_message_at)}</span>
+                      <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink)', margin: 0 }}>{otherName}</p>
+                      <span style={{ fontSize: '11px', color: 'var(--ink-4)' }}>{timeAgo(room.last_message_at)}</span>
                     </div>
                     {room.post_title && (
-                      <p style={{ fontSize: '11px', color: '#FF6B6B', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📌 {room.post_title}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--coral)', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📌 {room.post_title}</p>
                     )}
-                    <p style={{ fontSize: '13px', color: '#888', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <p style={{ fontSize: '13px', color: 'var(--ink-3)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {room.last_message ?? '메시지가 없어요'}
                     </p>
                   </div>

@@ -1,17 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-
-type FeedPost = {
-  id: string
-  content: string | null
-  image_url: string | null
-  user_id: string
-  nickname: string | null
-  like_count: number
-  comment_count: number
-  created_at: string
-}
+import { User, FeedPost } from '@/lib/types'
+import { timeAgo } from '@/lib/utils'
+import { notify } from '@/lib/social'
+import { Header, BackButton, IconButton, Avatar, Button, Input, EmptyState } from '@/components/ui'
+import { ReportSheet } from '@/components/ReportSheet'
 
 type FeedComment = {
   id: string
@@ -22,82 +16,241 @@ type FeedComment = {
   created_at: string
 }
 
-type User = {
-  id: string
-  email: string
-  nickname: string
-}
-
-type Props = {
-  user: User | null
-  onRequireAuth: () => void
-}
+type Props = { user: User | null; onRequireAuth: () => void }
 
 export default function FeedTab({ user, onRequireAuth }: Props) {
   const [feeds, setFeeds] = useState<FeedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [content, setContent] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [selectedFeed, setSelectedFeed] = useState<FeedPost | null>(null)
-  const [comments, setComments] = useState<FeedComment[]>([])
-  const [newComment, setNewComment] = useState('')
-  const [commentLoading, setCommentLoading] = useState(false)
-  const [myLiked, setMyLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(0)
+  const [selected, setSelected] = useState<FeedPost | null>(null)
   const [likedFeeds, setLikedFeeds] = useState<Set<string>>(new Set())
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    fetchFeeds()
-  }, [])
-
-  useEffect(() => {
-    if (user) fetchMyLikes()
-  }, [user])
+  useEffect(() => { fetchFeeds() }, [])
+  useEffect(() => { if (user) fetchMyLikes() }, [user])
 
   async function fetchFeeds() {
     setLoading(true)
-    const { data } = await supabase
-      .from('feed_posts')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data } = await supabase.from('feed_posts').select('*').order('created_at', { ascending: false })
     if (data) setFeeds(data)
     setLoading(false)
   }
 
   async function fetchMyLikes() {
     if (!user) return
-    const { data } = await supabase
-      .from('feed_likes')
-      .select('feed_id')
-      .eq('user_id', user.id)
-    if (data) {
-      setLikedFeeds(new Set(data.map(d => d.feed_id)))
+    const { data } = await supabase.from('feed_likes').select('feed_id').eq('user_id', user.id)
+    if (data) setLikedFeeds(new Set(data.map(d => d.feed_id)))
+  }
+
+  async function handleLike(feed: FeedPost) {
+    if (!user) { onRequireAuth(); return }
+    const isLiked = likedFeeds.has(feed.id)
+    if (isLiked) {
+      await supabase.from('feed_likes').delete().eq('feed_id', feed.id).eq('user_id', user.id)
+      const c = feed.like_count - 1
+      await supabase.from('feed_posts').update({ like_count: c }).eq('id', feed.id)
+      likedFeeds.delete(feed.id); setLikedFeeds(new Set(likedFeeds))
+      setFeeds(feeds.map(f => f.id === feed.id ? { ...f, like_count: c } : f))
+    } else {
+      const { error } = await supabase.from('feed_likes').insert({ feed_id: feed.id, user_id: user.id })
+      if (!error) {
+        const c = feed.like_count + 1
+        await supabase.from('feed_posts').update({ like_count: c }).eq('id', feed.id)
+        likedFeeds.add(feed.id); setLikedFeeds(new Set(likedFeeds))
+        setFeeds(feeds.map(f => f.id === feed.id ? { ...f, like_count: c } : f))
+        notify({ userId: feed.user_id, actorId: user.id, actorNickname: user.nickname, type: 'feed_like', targetType: 'feed', targetId: feed.id })
+      }
     }
   }
 
-  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
+  if (selected) {
+    return <FeedDetail feed={selected} user={user} liked={likedFeeds.has(selected.id)} onToggleLike={() => handleLike(selected)} onBack={() => { setSelected(null); fetchFeeds() }} onRequireAuth={onRequireAuth} />
+  }
+  if (showForm && user) {
+    return <FeedForm user={user} onClose={() => setShowForm(false)} onSubmitted={() => { setShowForm(false); fetchFeeds() }} />
   }
 
-  function handleImageRemove(e: React.MouseEvent) {
-    e.stopPropagation()
-    setImageFile(null)
-    setImagePreview(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+      <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 90px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {loading ? (
+          Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px' }}>
+                <div className="skeleton" style={{ width: '34px', height: '34px', borderRadius: '50%' }} />
+                <div className="skeleton" style={{ width: '90px', height: '13px' }} />
+              </div>
+              <div className="skeleton" style={{ width: '100%', aspectRatio: '1' }} />
+            </div>
+          ))
+        ) : feeds.length === 0 ? (
+          <EmptyState emoji="📸" title="아직 자랑글이 없어요" desc="오늘 뽑은 인형을 제일 먼저 자랑해보세요!" action={<Button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }}>+ 자랑하기</Button>} />
+        ) : (
+          feeds.map(feed => (
+            <div key={feed.id} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px' }}>
+                <Avatar name={feed.nickname} size={34} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{feed.nickname ?? '익명'}</p>
+                  <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(feed.created_at)}</p>
+                </div>
+              </div>
+              {feed.image_url && (
+                <div onClick={() => setSelected(feed)} style={{ cursor: 'pointer' }}>
+                  <img src={feed.image_url} alt="자랑" style={{ width: '100%', maxHeight: '440px', objectFit: 'cover', display: 'block' }} />
+                </div>
+              )}
+              <div style={{ padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: feed.content ? '10px' : 0 }}>
+                  <button onClick={() => handleLike(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    <span style={{ fontSize: '19px' }}>{likedFeeds.has(feed.id) ? '❤️' : '🤍'}</span>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.like_count}</span>
+                  </button>
+                  <button onClick={() => setSelected(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    <span style={{ fontSize: '18px' }}>💬</span>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.comment_count}</span>
+                  </button>
+                </div>
+                {feed.content && (
+                  <p onClick={() => setSelected(feed)} style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5, cursor: 'pointer', whiteSpace: 'pre-wrap' }}>{feed.content}</p>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </main>
+
+      <button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }} className="pressable" style={{ position: 'absolute', bottom: 'calc(var(--nav-h) + 16px)', right: '18px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', fontSize: '28px', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', zIndex: 40 }}>+</button>
+    </div>
+  )
+}
+
+function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth }: {
+  feed: FeedPost; user: User | null; liked: boolean; onToggleLike: () => void; onBack: () => void; onRequireAuth: () => void
+}) {
+  const [comments, setComments] = useState<FeedComment[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [myLiked, setMyLiked] = useState(liked)
+  const [likeCount, setLikeCount] = useState(feed.like_count)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [showReport, setShowReport] = useState(false)
+  const isMine = user?.id === feed.user_id
+
+  useEffect(() => {
+    supabase.from('feed_comments').select('*').eq('feed_id', feed.id).order('created_at', { ascending: true }).then(({ data }) => {
+      if (data) setComments(data)
+    })
+  }, [feed.id])
+
+  function toggleLike() {
+    onToggleLike()
+    setMyLiked(!myLiked)
+    setLikeCount(myLiked ? likeCount - 1 : likeCount + 1)
   }
+
+  async function handleComment() {
+    if (!user) { onRequireAuth(); return }
+    if (!newComment.trim()) return
+    const { error } = await supabase.from('feed_comments').insert({ feed_id: feed.id, user_id: user.id, nickname: user.nickname, content: newComment.trim() })
+    if (!error) {
+      const { data } = await supabase.from('feed_comments').select('*').eq('feed_id', feed.id).order('created_at', { ascending: true })
+      if (data) { setComments(data); await supabase.from('feed_posts').update({ comment_count: data.length }).eq('id', feed.id) }
+      setNewComment('')
+      notify({ userId: feed.user_id, actorId: user.id, actorNickname: user.nickname, type: 'feed_comment', targetType: 'feed', targetId: feed.id })
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('이 자랑글을 삭제할까요?')) return
+    await supabase.from('feed_posts').delete().eq('id', feed.id)
+    onBack()
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
+      <Header
+        left={<BackButton onClick={onBack} />}
+        title="자랑 상세"
+        right={
+          isMine ? (
+            <div style={{ position: 'relative' }}>
+              <IconButton onClick={() => setMenuOpen(!menuOpen)}>⋯</IconButton>
+              {menuOpen && (
+                <>
+                  <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
+                  <div style={{ position: 'absolute', top: '42px', right: 0, background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-lg)', zIndex: 31, overflow: 'hidden', minWidth: '130px' }}>
+                    <button onClick={handleDelete} style={{ width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', fontSize: '14px', color: 'var(--danger)', fontWeight: 600, cursor: 'pointer' }}>🗑 삭제하기</button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <IconButton onClick={() => setShowReport(true)} aria-label="신고">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16h.01M10.3 3.9L2 18a1 1 0 00.9 1.5h18.2A1 1 0 0022 18L13.7 3.9a2 2 0 00-3.4 0z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </IconButton>
+          )
+        }
+      />
+
+      <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
+        {feed.image_url && <img src={feed.image_url} alt="자랑" style={{ width: '100%', maxHeight: '460px', objectFit: 'cover' }} />}
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Avatar name={feed.nickname} />
+            <div>
+              <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 2px' }}>{feed.nickname ?? '익명'}</p>
+              <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(feed.created_at)}</p>
+            </div>
+          </div>
+          {feed.content && <p style={{ fontSize: '15px', color: 'var(--ink)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{feed.content}</p>}
+
+          <Button full size="lg" variant={myLiked ? 'primary' : 'soft'} onClick={toggleLike}>
+            {myLiked ? '❤️ 좋아요' : '🤍 좋아요'} {likeCount > 0 && likeCount}
+          </Button>
+
+          <div>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 14px' }}>댓글 {comments.length > 0 && <span style={{ color: 'var(--coral)' }}>{comments.length}</span>}</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {comments.length === 0 ? (
+                <p style={{ fontSize: '13px', color: 'var(--ink-4)', textAlign: 'center', padding: '24px 0' }}>첫 댓글을 남겨보세요 😊</p>
+              ) : comments.map(c => (
+                <div key={c.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <Avatar name={c.nickname} size={30} color="var(--ink-3)" />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-2)' }}>{c.nickname ?? '익명'}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--ink-4)' }}>{timeAgo(c.created_at)}</span>
+                    </div>
+                    <p style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5 }}>{c.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', gap: '8px', background: 'var(--surface)', flexShrink: 0 }}>
+        <Input placeholder={user ? '댓글 입력...' : '로그인 후 댓글'} value={newComment} onChange={(e) => setNewComment(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleComment()} style={{ flex: 1, padding: '11px 14px' }} />
+        <Button onClick={handleComment} disabled={!newComment.trim()} variant={newComment.trim() ? 'primary' : 'outline'} style={{ flexShrink: 0 }}>등록</Button>
+      </div>
+
+      {showReport && (
+        <ReportSheet user={user} targetType="feed" targetId={feed.id} targetUserId={feed.user_id} targetNickname={feed.nickname} onClose={() => setShowReport(false)} onRequireAuth={onRequireAuth} onDone={(msg) => { setShowReport(false); alert(msg) }} />
+      )}
+    </div>
+  )
+}
+
+function FeedForm({ user, onClose, onSubmitted }: { user: User; onClose: () => void; onSubmitted: () => void }) {
+  const [content, setContent] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleSubmit() {
-    if (!user) { onRequireAuth(); return }
     if (!content.trim() && !imageFile) return
     setUploading(true)
-
     let image_url = null
     if (imageFile) {
       const fileName = `feed_${Date.now()}_${imageFile.name}`
@@ -107,301 +260,36 @@ export default function FeedTab({ user, onRequireAuth }: Props) {
         image_url = urlData.publicUrl
       }
     }
-
-    const { error } = await supabase.from('feed_posts').insert({
-      content: content.trim(),
-      image_url,
-      user_id: user.id,
-      nickname: user.nickname,
-    })
-
-    if (!error) {
-      setContent(''); setImageFile(null); setImagePreview(null)
-      setShowForm(false); fetchFeeds()
-    }
+    const { error } = await supabase.from('feed_posts').insert({ content: content.trim(), image_url, user_id: user.id, nickname: user.nickname })
     setUploading(false)
+    if (!error) onSubmitted()
   }
 
-  async function handleFeedLike(feed: FeedPost) {
-    if (!user) { onRequireAuth(); return }
-    const isLiked = likedFeeds.has(feed.id)
-
-    if (isLiked) {
-      await supabase.from('feed_likes').delete().eq('feed_id', feed.id).eq('user_id', user.id)
-      const newCount = feed.like_count - 1
-      await supabase.from('feed_posts').update({ like_count: newCount }).eq('id', feed.id)
-      likedFeeds.delete(feed.id)
-      setLikedFeeds(new Set(likedFeeds))
-      setFeeds(feeds.map(f => f.id === feed.id ? { ...f, like_count: newCount } : f))
-      if (selectedFeed?.id === feed.id) {
-        setMyLiked(false)
-        setLikeCount(newCount)
-      }
-    } else {
-      const { error } = await supabase.from('feed_likes').insert({ feed_id: feed.id, user_id: user.id })
-      if (!error) {
-        const newCount = feed.like_count + 1
-        await supabase.from('feed_posts').update({ like_count: newCount }).eq('id', feed.id)
-        likedFeeds.add(feed.id)
-        setLikedFeeds(new Set(likedFeeds))
-        setFeeds(feeds.map(f => f.id === feed.id ? { ...f, like_count: newCount } : f))
-        if (selectedFeed?.id === feed.id) {
-          setMyLiked(true)
-          setLikeCount(newCount)
-        }
-      }
-    }
-  }
-
-  async function openDetail(feed: FeedPost) {
-    setSelectedFeed(feed)
-    setLikeCount(feed.like_count)
-    setMyLiked(likedFeeds.has(feed.id))
-
-    const { data } = await supabase
-      .from('feed_comments')
-      .select('*')
-      .eq('feed_id', feed.id)
-      .order('created_at', { ascending: true })
-    if (data) setComments(data)
-  }
-
-  async function handleComment() {
-    if (!user) { onRequireAuth(); return }
-    if (!selectedFeed || !newComment.trim()) return
-    setCommentLoading(true)
-
-    const { error } = await supabase.from('feed_comments').insert({
-      feed_id: selectedFeed.id,
-      user_id: user.id,
-      nickname: user.nickname,
-      content: newComment.trim()
-    })
-
-    if (!error) {
-      const { data } = await supabase
-        .from('feed_comments')
-        .select('*')
-        .eq('feed_id', selectedFeed.id)
-        .order('created_at', { ascending: true })
-      if (data) {
-        setComments(data)
-        await supabase.from('feed_posts')
-          .update({ comment_count: data.length })
-          .eq('id', selectedFeed.id)
-        setFeeds(feeds.map(f => f.id === selectedFeed.id ? { ...f, comment_count: data.length } : f))
-      }
-      setNewComment('')
-    }
-    setCommentLoading(false)
-  }
-
-  function timeAgo(dateStr: string) {
-    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-    if (diff < 60) return '방금 전'
-    if (diff < 3600) return `${Math.floor(diff / 60)}분 전`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`
-    return `${Math.floor(diff / 86400)}일 전`
-  }
-
-  // 상세 화면
-  if (selectedFeed) {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-          <button onClick={() => { setSelectedFeed(null); fetchFeeds() }} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>←</button>
-          <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0, flex: 1 }}>자랑 상세</h2>
-        </div>
-
-        <main style={{ flex: 1, overflowY: 'auto' }}>
-          {selectedFeed.image_url && (
-            <img src={selectedFeed.image_url} alt="자랑" style={{ width: '100%', maxHeight: '400px', objectFit: 'cover' }} />
-          )}
-
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* 작성자 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#FF6B6B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: '700', flexShrink: 0 }}>
-                {(selectedFeed.nickname ?? '익명')[0]}
-              </div>
-              <div>
-                <p style={{ fontSize: '13px', fontWeight: '600', color: '#222', margin: '0 0 2px' }}>{selectedFeed.nickname ?? '익명'}</p>
-                <p style={{ fontSize: '11px', color: '#aaa', margin: 0 }}>{timeAgo(selectedFeed.created_at)}</p>
-              </div>
-            </div>
-
-            {/* 내용 */}
-            {selectedFeed.content && (
-              <p style={{ fontSize: '15px', color: '#222', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>{selectedFeed.content}</p>
-            )}
-
-            {/* 좋아요/댓글 수 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '12px', color: '#bbb' }}>❤️ {likeCount}</span>
-              <span style={{ fontSize: '12px', color: '#bbb' }}>💬 {comments.length}</span>
-            </div>
-
-            {/* 좋아요 버튼 */}
-            <button
-              onClick={() => handleFeedLike(selectedFeed)}
-              style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: myLiked ? '#FF6B6B' : '#FFF5F5', color: myLiked ? '#fff' : '#FF6B6B', border: '1.5px solid #FF6B6B', cursor: 'pointer', fontSize: '15px', fontWeight: '700', transition: 'all 0.2s' }}
-            >
-              {myLiked ? '❤️ 좋아요!' : '🤍 좋아요'} {likeCount > 0 && `(${likeCount})`}
-            </button>
-
-            {/* 댓글 */}
-            <div>
-              <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#222', margin: '0 0 12px' }}>
-                댓글 {comments.length > 0 && `(${comments.length})`}
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
-                {comments.length === 0 ? (
-                  <p style={{ fontSize: '13px', color: '#bbb', textAlign: 'center', padding: '20px 0' }}>첫 번째 댓글을 남겨보세요 😊</p>
-                ) : (
-                  comments.map(c => (
-                    <div key={c.id} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#888', flexShrink: 0 }}>
-                        {(c.nickname ?? '익')[0]}
-                      </div>
-                      <div style={{ flex: 1, backgroundColor: '#fafafa', borderRadius: '10px', padding: '8px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#444' }}>{c.nickname ?? '익명'}</span>
-                          <span style={{ fontSize: '11px', color: '#bbb' }}>{timeAgo(c.created_at)}</span>
-                        </div>
-                        <p style={{ fontSize: '13px', color: '#222', margin: 0, lineHeight: '1.5' }}>{c.content}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  placeholder={user ? '댓글을 입력하세요...' : '로그인 후 댓글을 남길 수 있어요'}
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleComment()}
-                  style={{ flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #f0f0f0', fontSize: '13px', outline: 'none', backgroundColor: '#fafafa' }}
-                />
-                <button
-                  onClick={handleComment}
-                  disabled={!newComment.trim() || commentLoading}
-                  style={{ padding: '10px 16px', borderRadius: '10px', backgroundColor: newComment.trim() ? '#FF6B6B' : '#f0f0f0', color: newComment.trim() ? '#fff' : '#ccc', border: 'none', cursor: newComment.trim() ? 'pointer' : 'default', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap' }}
-                >등록</button>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  // 등록 폼
-  if (showForm) {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <button onClick={() => { setShowForm(false); setImagePreview(null); setImageFile(null); setContent('') }} style={{ fontSize: '14px', color: '#888', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>자랑하기</h2>
-          <button onClick={handleSubmit} disabled={uploading || (!content.trim() && !imageFile)} style={{ fontSize: '14px', color: '#fff', fontWeight: '600', background: (content.trim() || imageFile) ? '#FF6B6B' : '#ccc', border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: '20px', opacity: uploading ? 0.6 : 1 }}>
-            {uploading ? '올리는 중...' : '올리기'}
-          </button>
-        </div>
-
-        <main style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* 사진 */}
-          <div onClick={() => fileInputRef.current?.click()} style={{ width: '100%', height: '240px', borderRadius: '16px', border: imagePreview ? 'none' : '2px dashed #f0f0f0', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}>
-            {imagePreview ? (
-              <>
-                <img src={imagePreview} alt="미리보기" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <button onClick={handleImageRemove} style={{ position: 'absolute', top: '8px', right: '8px', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '14px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: '36px' }}>📸</span>
-                <p style={{ fontSize: '14px', color: '#aaa', margin: '8px 0 0' }}>뽑기 결과를 자랑해보세요!</p>
-                <p style={{ fontSize: '12px', color: '#ccc', margin: '4px 0 0' }}>탭해서 사진 추가</p>
-              </>
-            )}
-          </div>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
-
-          {/* 내용 */}
-          <textarea
-            placeholder="오늘 뭘 뽑았나요? 자랑해보세요! 🎉"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1.5px solid #f0f0f0', fontSize: '14px', outline: 'none', backgroundColor: '#fafafa', boxSizing: 'border-box', height: '120px', resize: 'none', fontFamily: 'inherit', lineHeight: '1.6' }}
-          />
-        </main>
-      </div>
-    )
-  }
-
-  // 피드 목록
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-      <main style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {loading ? (
-          <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px' }}>불러오는 중... 🔄</p>
-        ) : feeds.length === 0 ? (
-          <p style={{ color: '#aaa', textAlign: 'center', marginTop: '40px' }}>
-            아직 자랑글이 없어요. 첫 번째로 자랑해보세요! 📸
-          </p>
-        ) : (
-          feeds.map(feed => (
-            <div key={feed.id} style={{ borderRadius: '16px', border: '1px solid #f0f0f0', overflow: 'hidden' }}>
-              {/* 작성자 헤더 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 14px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#FF6B6B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: '700', flexShrink: 0 }}>
-                  {(feed.nickname ?? '익명')[0]}
-                </div>
-                <div>
-                  <p style={{ fontSize: '13px', fontWeight: '600', color: '#222', margin: 0 }}>{feed.nickname ?? '익명'}</p>
-                  <p style={{ fontSize: '11px', color: '#bbb', margin: 0 }}>{timeAgo(feed.created_at)}</p>
-                </div>
-              </div>
-
-              {/* 사진 */}
-              {feed.image_url && (
-                <div onClick={() => openDetail(feed)} style={{ cursor: 'pointer' }}>
-                  <img src={feed.image_url} alt="자랑" style={{ width: '100%', maxHeight: '300px', objectFit: 'cover' }} />
-                </div>
-              )}
-
-              {/* 내용 + 반응 */}
-              <div style={{ padding: '12px 14px' }}>
-                {feed.content && (
-                  <p onClick={() => openDetail(feed)} style={{ fontSize: '14px', color: '#222', margin: '0 0 10px', lineHeight: '1.5', cursor: 'pointer', whiteSpace: 'pre-wrap' }}>{feed.content}</p>
-                )}
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <button
-                    onClick={() => handleFeedLike(feed)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                  >
-                    <span style={{ fontSize: '16px' }}>{likedFeeds.has(feed.id) ? '❤️' : '🤍'}</span>
-                    <span style={{ fontSize: '12px', color: '#888' }}>{feed.like_count}</span>
-                  </button>
-                  <button
-                    onClick={() => openDetail(feed)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                  >
-                    <span style={{ fontSize: '16px' }}>💬</span>
-                    <span style={{ fontSize: '12px', color: '#888' }}>{feed.comment_count}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
+      <Header
+        left={<button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '14px', color: 'var(--ink-3)', cursor: 'pointer', padding: '8px' }}>취소</button>}
+        title="자랑하기"
+        right={<Button size="sm" onClick={handleSubmit} disabled={uploading || (!content.trim() && !imageFile)}>{uploading ? '올리는 중' : '올리기'}</Button>}
+      />
+      <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div onClick={() => fileInputRef.current?.click()} className="pressable" style={{ width: '100%', aspectRatio: '4/3', borderRadius: 'var(--r-lg)', border: imagePreview ? 'none' : '2px dashed var(--line-2)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}>
+          {imagePreview ? (
+            <>
+              <img src={imagePreview} alt="미리보기" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }} style={{ position: 'absolute', top: '10px', right: '10px', width: '30px', height: '30px', borderRadius: '50%', background: 'rgba(26,21,35,0.6)', color: '#fff', fontSize: '15px', border: 'none', cursor: 'pointer' }}>✕</button>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: '40px' }}>📸</span>
+              <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: '10px 0 0', fontWeight: 600 }}>뽑기 결과를 자랑해보세요!</p>
+              <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: '4px 0 0' }}>탭해서 사진 추가</p>
+            </>
+          )}
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)) } }} style={{ display: 'none' }} />
+        <textarea placeholder="오늘 뭘 뽑았나요? 자랑해보세요! 🎉" value={content} onChange={(e) => setContent(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '14.5px', outline: 'none', minHeight: '130px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
       </main>
-
-      <button
-        onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }}
-        style={{ position: 'fixed', bottom: '72px', right: 'calc(50% - 215px + 20px)', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#FF6B6B', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,107,107,0.4)' }}
-      >+</button>
     </div>
   )
 }
