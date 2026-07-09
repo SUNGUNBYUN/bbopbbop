@@ -49,13 +49,20 @@ export default function MapTab({ onSelectPost }: Props) {
   useEffect(() => {
     supabase.from('posts').select('*').then(({ data }) => { if (data) setPosts(data) })
 
-    if (window.kakao && window.kakao.maps) {
+    if (window.kakao && window.kakao.maps && window.kakao.maps.Map) {
       setLoaded(true)
+    } else if (window.kakao && window.kakao.maps) {
+      window.kakao.maps.load(() => setLoaded(true))
     } else {
-      const script = document.createElement('script')
-      script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_APP_KEY}&libraries=services&autoload=false`
-      script.onload = () => window.kakao.maps.load(() => setLoaded(true))
-      document.head.appendChild(script)
+      const existing = document.querySelector('script[src*="dapi.kakao.com"]')
+      if (existing) {
+        existing.addEventListener('load', () => window.kakao.maps.load(() => setLoaded(true)))
+      } else {
+        const script = document.createElement('script')
+        script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_APP_KEY}&libraries=services&autoload=false`
+        script.onload = () => window.kakao.maps.load(() => setLoaded(true))
+        document.head.appendChild(script)
+      }
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -78,6 +85,11 @@ export default function MapTab({ onSelectPost }: Props) {
 
   function initMap() {
     if (!userLocation || !mapContainerRef.current) return
+    // 컨테이너 높이가 0이면 강제로 설정
+    if (mapContainerRef.current.offsetHeight === 0) {
+      mapContainerRef.current.style.height = '100%'
+      mapContainerRef.current.style.minHeight = '400px'
+    }
     const center = new window.kakao.maps.LatLng(userLocation.lat, userLocation.lng)
     const map = new window.kakao.maps.Map(mapContainerRef.current, { center, level: 4 })
     mapRef.current = map
@@ -199,13 +211,13 @@ export default function MapTab({ onSelectPost }: Props) {
       </div>
 
       {/* 지도 */}
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div style={{ flex: 1, position: 'relative', minHeight: '300px' }}>
         {!loaded && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-2)', zIndex: 5 }}>
             <Spinner label="지도 불러오는 중..." />
           </div>
         )}
-        <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+        <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
 
         {/* 내 위치 버튼 */}
         {loaded && (
