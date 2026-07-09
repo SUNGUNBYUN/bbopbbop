@@ -25,7 +25,6 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState(0)
 
-  // 화면 오버레이 상태
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
@@ -57,7 +56,6 @@ export default function Home() {
     })
   }
 
-  // 안 읽은 알림 개수 (로그인 시 + 30초마다)
   useEffect(() => {
     if (!user) { setUnread(0); return }
     let alive = true
@@ -79,12 +77,6 @@ export default function Home() {
     setLoading(false)
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    setUser(null)
-    showToast('로그아웃 되었어요', '👋')
-  }
-
   function requireAuth() { setShowAuth(true) }
 
   async function startChat() {
@@ -102,7 +94,6 @@ export default function Home() {
     if (!error && newRoom) { setChatRoomId(newRoom.id); setShowChat(true) }
   }
 
-  // ===== 제보 상세 =====
   if (selectedPost) {
     return (
       <div className="app-shell">
@@ -122,7 +113,6 @@ export default function Home() {
     )
   }
 
-  // ===== 제보 작성 =====
   if (showForm && user) {
     return (
       <div className="app-shell">
@@ -135,10 +125,8 @@ export default function Home() {
     )
   }
 
-  // ===== 메인 =====
   return (
     <div className="app-shell">
-      {/* 헤더 */}
       <header style={{
         height: 'var(--header-h)', padding: '0 16px', flexShrink: 0,
         borderBottom: '1px solid var(--line)', background: 'var(--surface)',
@@ -173,26 +161,23 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 탭 콘텐츠 */}
-      {activeTab === 0 && (
-        <HomeTab
-          posts={posts}
-          loading={loading}
-          onSelectPost={setSelectedPost}
-          onNewPost={() => { if (!user) { requireAuth(); return }; setShowForm(true) }}
-        />
-      )}
-      {activeTab === 1 && <MapTab onSelectPost={(p) => setSelectedPost(p as Post)} />}
-      {activeTab === 2 && <MarketTab user={user} onRequireAuth={requireAuth} />}
-      {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} />}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+        {activeTab === 0 && (
+          <HomeTab
+            posts={posts}
+            loading={loading}
+            onSelectPost={setSelectedPost}
+            onNewPost={() => { if (!user) { requireAuth(); return }; setShowForm(true) }}
+          />
+        )}
+        {activeTab === 1 && <MapTab onSelectPost={(p) => setSelectedPost(p as Post)} />}
+        {activeTab === 2 && <MarketTab user={user} onRequireAuth={requireAuth} />}
+        {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} />}
+        {activeTab === 0 && <FAB onClick={() => { if (!user) { requireAuth(); return }; setShowForm(true) }} />}
+      </div>
 
-      {/* FAB — 제보 탭에서만 */}
-      {activeTab === 0 && <FAB onClick={() => { if (!user) { requireAuth(); return }; setShowForm(true) }} />}
-
-      {/* 하단 네비 */}
       <BottomNav active={activeTab} onChange={setActiveTab} />
 
-      {/* 오버레이 */}
       {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
       {showMyPage && user && <MyPage user={user} onClose={() => setShowMyPage(false)} onSelectPost={(p) => { setShowMyPage(false); setSelectedPost(p) }} />}
       {showNotifications && user && (
