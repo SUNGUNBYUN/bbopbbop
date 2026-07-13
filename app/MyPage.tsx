@@ -79,7 +79,6 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
             <p style={{ fontSize: '12.5px', opacity: 0.85, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
           </div>
         </div>
-        {/* 통계 */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
           {[{ n: counts.posts, l: '제보' }, { n: counts.market, l: '마켓' }, { n: counts.feed, l: '피드' }].map(s => (
             <div key={s.l} style={{ flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 'var(--r-md)', padding: '10px', textAlign: 'center', backdropFilter: 'blur(4px)' }}>
@@ -186,8 +185,15 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
           </>
         )}
 
+        {/* 약관 링크 */}
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '24px' }}>
+          <a href="/privacy" target="_blank" style={{ fontSize: '12.5px', color: 'var(--ink-4)', textDecoration: 'none' }}>개인정보처리방침</a>
+          <span style={{ color: 'var(--line-2)' }}>|</span>
+          <a href="/terms" target="_blank" style={{ fontSize: '12.5px', color: 'var(--ink-4)', textDecoration: 'none' }}>이용약관</a>
+        </div>
+
         {/* 로그아웃 */}
-        <button onClick={handleLogout} style={{ width: '100%', padding: '14px', marginTop: '20px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-3)', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>로그아웃</button>
+        <button onClick={handleLogout} style={{ width: '100%', padding: '14px', marginTop: '12px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-3)', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>로그아웃</button>
       </main>
     </div>
   )
