@@ -1,10 +1,9 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { User, Place } from '@/lib/types'
 import { Header, BackButton, Button, Input, Field } from './ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from './MultiImageUploader'
-import KakaoPlaceSearch from '@/app/KakaoMap'
 
 type Props = {
   user: User
@@ -30,9 +29,11 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
   function handlePlaceSelect(place: Place) {
     setLocation(place.place_name)
     setLocationDetail(place.road_address_name || place.address_name)
-    setLocationLat(parseFloat(place.y)); setLocationLng(parseFloat(place.x))
+    setLocationLat(parseFloat(place.y))
+    setLocationLng(parseFloat(place.x))
     setLocationPlaceName(place.place_name)
-    setShowMapSearch(false); setErrors(p => ({ ...p, location: undefined }))
+    setShowMapSearch(false)
+    setErrors(p => ({ ...p, location: undefined }))
   }
 
   function validate() {
@@ -40,7 +41,8 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
     if (images.length === 0) e.image = '사진을 추가해주세요'
     if (!title.trim()) e.title = '뭐가 있는지 알려주세요'
     if (!location.trim()) e.location = '업체 위치를 입력해주세요'
-    setErrors(e); return Object.keys(e).length === 0
+    setErrors(e)
+    return Object.keys(e).length === 0
   }
 
   async function handleSubmit() {
@@ -50,8 +52,8 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
     const fullLocation = locationDetail ? `${location} (${locationDetail})` : location
     const { error } = await supabase.from('posts').insert({
       title, location: fullLocation, tags,
-      image_url: urls[0] ?? null,   // 대표 이미지 (하위호환)
-      images: urls,                 // 전체 이미지
+      image_url: urls[0] ?? null,
+      images: urls,
       user_id: user.id, nickname: user.nickname,
       latitude: locationLat, longitude: locationLng, place_name: locationPlaceName,
     })
@@ -68,7 +70,6 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
       />
 
       <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* 사진 (여러 장) */}
         <Field label="사진" required error={errors.image}>
           <MultiImageUploader
             images={images}
@@ -79,7 +80,6 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
           <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: '8px 0 0' }}>첫 번째 사진이 대표로 보여요. 최대 5장.</p>
         </Field>
 
-        {/* 뭐가 있어요 */}
         <Field label="뭐가 있어요?" required error={errors.title}>
           <Input
             placeholder="예) 피카츄 인형, 산리오 가챠"
@@ -89,7 +89,6 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
           />
         </Field>
 
-        {/* 업체 위치 */}
         <Field label="업체 위치" required error={errors.location}>
           {location ? (
             <div style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)', position: 'relative' }}>
@@ -114,13 +113,67 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
           )}
         </Field>
 
-        {/* 태그 */}
         <Field label="태그" optional>
           <Input placeholder="#피카츄 #포켓몬" value={tags} onChange={(e) => setTags(e.target.value)} />
         </Field>
       </main>
 
-      {showMapSearch && <KakaoPlaceSearch onSelect={handlePlaceSelect} onClose={() => setShowMapSearch(false)} />}
+      {showMapSearch && <PlaceSearchSheet onSelect={handlePlaceSelect} onClose={() => setShowMapSearch(false)} />}
+    </div>
+  )
+}
+
+function PlaceSearchSheet({ onSelect, onClose }: { onSelect: (place: Place) => void; onClose: () => void }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Place[]>([])
+
+  function search() {
+    if (!query.trim()) return
+    const ps = new (window as any).kakao.maps.services.Places()
+    ps.keywordSearch(query, (data: any[], status: string) => {
+      if (status === (window as any).kakao.maps.services.Status.OK) {
+        setResults(data.map((p: any) => ({
+          place_name: p.place_name,
+          address_name: p.address_name,
+          road_address_name: p.road_address_name,
+          x: p.x,
+          y: p.y,
+        })))
+      } else {
+        setResults([])
+      }
+    })
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(26,21,35,0.5)', zIndex: 200, display: 'flex', alignItems: 'flex-end' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 'var(--app-max)', margin: '0 auto', background: 'var(--surface)', borderRadius: 'var(--r-xl) var(--r-xl) 0 0', padding: '20px', maxHeight: '70dvh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>업체 검색</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+          <input
+            placeholder="업체명 검색 (예: 홍대 뽑기왕)"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && search()}
+            style={{ flex: 1, padding: '12px 14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }}
+          />
+          <button onClick={search} style={{ padding: '12px 18px', borderRadius: 'var(--r-md)', background: 'var(--coral)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}>검색</button>
+        </div>
+        <div className="no-scrollbar" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {results.length === 0 && (
+            <p style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: '13px', padding: '24px 0' }}>업체명으로 검색해보세요</p>
+          )}
+          {results.map((place, i) => (
+            <button key={i} onClick={() => onSelect(place)} style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+              <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }}>{place.place_name}</p>
+              <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{place.road_address_name || place.address_name}</p>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
