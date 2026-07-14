@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Place, User } from '@/lib/types'
 import { PlaceRegister } from './PlaceRegister'
 
@@ -16,11 +16,34 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Place[]>([])
   const [showRegister, setShowRegister] = useState(false)
+  const [kakaoReady, setKakaoReady] = useState(false)
+  const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+      setKakaoReady(true)
+    } else if (window.kakao && window.kakao.maps) {
+      window.kakao.maps.load(() => setKakaoReady(true))
+    } else {
+      const existing = document.querySelector('script[src*="dapi.kakao.com"]')
+      if (existing) {
+        existing.addEventListener('load', () => window.kakao.maps.load(() => setKakaoReady(true)))
+      } else {
+        const script = document.createElement('script')
+        script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_APP_KEY}&libraries=services&autoload=false`
+        script.onload = () => window.kakao.maps.load(() => setKakaoReady(true))
+        document.head.appendChild(script)
+      }
+    }
+  }, [])
 
   function search() {
     if (!query.trim()) return
+    if (!kakaoReady || !window.kakao?.maps?.services) return
+    setSearching(true)
     const ps = new window.kakao.maps.services.Places()
     ps.keywordSearch(query, (data: any[], status: string) => {
+      setSearching(false)
       if (status === window.kakao.maps.services.Status.OK) {
         setResults(data.map((p: any) => ({
           place_name: p.place_name,
@@ -60,7 +83,7 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
             onKeyDown={(e) => e.key === 'Enter' && search()}
             style={{ flex: 1, padding: '12px 14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }}
           />
-          <button onClick={search} style={{ padding: '12px 18px', borderRadius: 'var(--r-md)', background: 'var(--coral)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}>검색</button>
+          <button onClick={search} disabled={!kakaoReady || searching} style={{ padding: '12px 18px', borderRadius: 'var(--r-md)', background: kakaoReady ? 'var(--coral)' : 'var(--ink-4)', color: '#fff', border: 'none', fontWeight: 700, cursor: kakaoReady ? 'pointer' : 'default', fontSize: '14px', whiteSpace: 'nowrap' }}>{searching ? '검색중' : !kakaoReady ? '로딩중' : '검색'}</button>
         </div>
         <div className="no-scrollbar" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {results.length === 0 && (
