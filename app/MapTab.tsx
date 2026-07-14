@@ -45,6 +45,8 @@ export default function MapTab({ onSelectPost }: Props) {
   const [selectedPlace, setSelectedPlace] = useState<PlaceWithPosts | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const overlaysRef = useRef<any[]>([])
+  const [showResearch, setShowResearch] = useState(false)
+  const [researching, setResearching] = useState(false)
 
   useEffect(() => {
     supabase.from('posts').select('*').then(({ data }) => { if (data) setPosts(data) })
@@ -71,7 +73,6 @@ export default function MapTab({ onSelectPost }: Props) {
         setLocationStatus('success')
       },
       () => {
-        // 위치 실패 시 서울 시청 기본값
         setUserLocation({ lat: 37.5665, lng: 126.9780 })
         setLocationStatus('fail')
       }
@@ -85,7 +86,6 @@ export default function MapTab({ onSelectPost }: Props) {
 
   function initMap() {
     if (!userLocation || !mapContainerRef.current) return
-    // 컨테이너 높이가 0이면 강제로 설정
     if (mapContainerRef.current.offsetHeight === 0) {
       mapContainerRef.current.style.height = '100%'
       mapContainerRef.current.style.minHeight = '400px'
@@ -94,7 +94,6 @@ export default function MapTab({ onSelectPost }: Props) {
     const map = new window.kakao.maps.Map(mapContainerRef.current, { center, level: 4 })
     mapRef.current = map
 
-    // 내 위치 (성공 시만)
     if (locationStatus === 'success') {
       new window.kakao.maps.CustomOverlay({
         position: center,
@@ -104,6 +103,13 @@ export default function MapTab({ onSelectPost }: Props) {
     }
 
     searchNearbyPlaces(map, userLocation)
+
+    window.kakao.maps.event.addListener(map, 'dragend', () => {
+      setShowResearch(true)
+    })
+    window.kakao.maps.event.addListener(map, 'zoom_changed', () => {
+      setShowResearch(true)
+    })
   }
 
   function searchNearbyPlaces(map: any, location: { lat: number; lng: number }) {
@@ -189,6 +195,16 @@ export default function MapTab({ onSelectPost }: Props) {
     })
   }
 
+  function researchCurrentArea() {
+    if (!mapRef.current) return
+    setResearching(true)
+    setShowResearch(false)
+    const center = mapRef.current.getCenter()
+    const location = { lat: center.getLat(), lng: center.getLng() }
+    searchNearbyPlaces(mapRef.current, location)
+    setTimeout(() => setResearching(false), 1500)
+  }
+
   function recenter() {
     if (mapRef.current && userLocation) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(userLocation.lat, userLocation.lng))
@@ -198,7 +214,6 @@ export default function MapTab({ onSelectPost }: Props) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-      {/* 상태 배너 */}
       <div style={{
         padding: '9px 16px', fontSize: '12.5px', fontWeight: 600, textAlign: 'center',
         background: locationStatus === 'success' ? 'var(--coral-soft)' : locationStatus === 'fail' ? 'var(--butter-soft)' : 'var(--surface-2)',
@@ -210,7 +225,6 @@ export default function MapTab({ onSelectPost }: Props) {
         {locationStatus === 'fail' && '📍 위치 권한이 없어 서울 중심으로 표시 중'}
       </div>
 
-      {/* 지도 */}
       <div style={{ flex: 1, position: 'relative', minHeight: '300px' }}>
         {!loaded && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-2)', zIndex: 5 }}>
@@ -218,6 +232,23 @@ export default function MapTab({ onSelectPost }: Props) {
           </div>
         )}
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
+
+        {/* 이 위치에서 재검색 버튼 */}
+        {loaded && showResearch && (
+          <button
+            onClick={researchCurrentArea}
+            className="pressable"
+            style={{
+              position: 'absolute', top: '14px', left: '50%', transform: 'translateX(-50%)',
+              zIndex: 10, padding: '9px 18px', borderRadius: 'var(--r-full)',
+              background: 'var(--surface)', border: 'none', boxShadow: 'var(--shadow-lg)',
+              fontSize: '13px', fontWeight: 700, color: 'var(--ink)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
+            }}
+          >
+            {researching ? '🔍 검색 중...' : '🔍 이 위치에서 검색'}
+          </button>
+        )}
 
         {/* 내 위치 버튼 */}
         {loaded && (
@@ -234,7 +265,6 @@ export default function MapTab({ onSelectPost }: Props) {
         )}
       </div>
 
-      {/* 업체 시트 */}
       {selectedPlace && (
         <div
           onClick={() => setSelectedPlace(null)}

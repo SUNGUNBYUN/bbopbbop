@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { User, Place } from '@/lib/types'
 import { Header, BackButton, Button, Input, Field } from './ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from './MultiImageUploader'
+import { PlaceRegister } from './PlaceRegister'
 
 type Props = {
   user: User
@@ -25,6 +26,7 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
   const [uploading, setUploading] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
   const [showMapSearch, setShowMapSearch] = useState(false)
+  const [showRegister, setShowRegister] = useState(false)
 
   function handlePlaceSelect(place: Place) {
     setLocation(place.place_name)
@@ -118,12 +120,25 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
         </Field>
       </main>
 
-      {showMapSearch && <PlaceSearchSheet onSelect={handlePlaceSelect} onClose={() => setShowMapSearch(false)} />}
+      {showMapSearch && (
+        <PlaceSearchSheet
+          onSelect={handlePlaceSelect}
+          onClose={() => setShowMapSearch(false)}
+          onNotFound={() => { setShowMapSearch(false); setShowRegister(true) }}
+        />
+      )}
+      {showRegister && (
+        <PlaceRegister
+          user={user}
+          onClose={() => setShowRegister(false)}
+          onRegistered={(place) => { setShowRegister(false); handlePlaceSelect(place) }}
+        />
+      )}
     </div>
   )
 }
 
-function PlaceSearchSheet({ onSelect, onClose }: { onSelect: (place: Place) => void; onClose: () => void }) {
+function PlaceSearchSheet({ onSelect, onClose, onNotFound }: { onSelect: (place: Place) => void; onClose: () => void; onNotFound: () => void }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Place[]>([])
 
@@ -164,7 +179,7 @@ function PlaceSearchSheet({ onSelect, onClose }: { onSelect: (place: Place) => v
         </div>
         <div className="no-scrollbar" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {results.length === 0 && (
-            <p style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: '13px', padding: '24px 0' }}>업체명으로 검색해보세요</p>
+            <p style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: '13px', padding: '16px 0' }}>업체명으로 검색하거나<br/>아래에서 직접 등록하세요</p>
           )}
           {results.map((place, i) => (
             <button key={i} onClick={() => onSelect(place)} style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
@@ -172,6 +187,15 @@ function PlaceSearchSheet({ onSelect, onClose }: { onSelect: (place: Place) => v
               <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{place.road_address_name || place.address_name}</p>
             </button>
           ))}
+
+          {/* 카카오맵에 없어요 버튼 */}
+          <button
+            onClick={onNotFound}
+            style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px dashed var(--coral)', background: 'var(--coral-soft)', cursor: 'pointer', textAlign: 'center', width: '100%', marginTop: '4px' }}
+          >
+            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--coral)', margin: '0 0 2px' }}>🗺️ 찾는 업체가 없나요?</p>
+            <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>지도에서 직접 위치를 등록해보세요</p>
+          </button>
         </div>
       </div>
     </div>
