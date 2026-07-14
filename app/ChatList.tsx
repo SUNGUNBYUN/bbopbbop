@@ -50,16 +50,17 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
     fetchRooms()
   }, [])
 
+  const [initialOpened, setInitialOpened] = useState(false)
+
   useEffect(() => {
-    if (initialRoomId && rooms.length > 0) {
+    if (initialRoomId && rooms.length > 0 && !initialOpened) {
       const room = rooms.find(r => r.id === initialRoomId)
-      if (room) openRoom(room)
+      if (room) { openRoom(room); setInitialOpened(true) }
     }
-  }, [initialRoomId, rooms])
+  }, [initialRoomId, rooms, initialOpened])
 
   useEffect(() => {
     if (!selectedRoom) return
-    // 실시간 메시지 구독
     const channel = supabase
       .channel(`room-${selectedRoom.id}`)
       .on('postgres_changes', {
@@ -70,9 +71,7 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
       }, (payload) => {
         const incoming = payload.new as Message
         setMessages(prev => {
-          // 이미 있으면 (내가 보낸 것) 무시
           if (prev.some(m => m.id === incoming.id)) return prev
-          // 내가 보낸 메시지면 무시 (낙관적 업데이트로 이미 있음)
           if (incoming.sender_id === user.id) return prev
           return [...prev, incoming]
         })
@@ -118,7 +117,6 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
     setSending(true)
     setNewMessage('')
 
-    // 즉시 화면에 반영 (낙관적 업데이트)
     const tempMessage: Message = {
       id: `temp-${Date.now()}`,
       room_id: selectedRoom.id,
@@ -138,7 +136,6 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
     }).select().single()
 
     if (!error) {
-      // 임시 메시지를 실제 메시지로 교체
       if (data) {
         setMessages(prev => prev.map(m => m.id === tempMessage.id ? (data as Message) : m))
       }
@@ -153,7 +150,6 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
         type: 'chat', targetTitle: selectedRoom.post_title ?? undefined,
       })
     } else {
-      // 실패 시 임시 메시지 제거
       setMessages(prev => prev.filter(m => m.id !== tempMessage.id))
       setNewMessage(content)
     }
@@ -172,7 +168,6 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
     return `${Math.floor(diff / 86400)}일 전`
   }
 
-  // 채팅 화면
   if (selectedRoom) {
     const otherName = getOtherNickname(selectedRoom)
 
@@ -231,7 +226,6 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
     )
   }
 
-  // 채팅방 목록
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--surface)', zIndex: 200, display: 'flex', flexDirection: 'column', maxWidth: '430px', margin: '0 auto' }}>
       <header style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
