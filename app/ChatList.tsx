@@ -68,7 +68,14 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
         table: 'messages',
         filter: `room_id=eq.${selectedRoom.id}`
       }, (payload) => {
-        setMessages(prev => [...prev, payload.new as Message])
+        const incoming = payload.new as Message
+        setMessages(prev => {
+          // 이미 있으면 (내가 보낸 것) 무시
+          if (prev.some(m => m.id === incoming.id)) return prev
+          // 내가 보낸 메시지면 무시 (낙관적 업데이트로 이미 있음)
+          if (incoming.sender_id === user.id) return prev
+          return [...prev, incoming]
+        })
         scrollToBottom()
       })
       .subscribe()
@@ -107,18 +114,36 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
 
   async function handleSend() {
     if (!selectedRoom || !newMessage.trim()) return
+    const content = newMessage.trim()
     setSending(true)
+    setNewMessage('')
 
-    const { error } = await supabase.from('messages').insert({
+    // 즉시 화면에 반영 (낙관적 업데이트)
+    const tempMessage: Message = {
+      id: `temp-${Date.now()}`,
       room_id: selectedRoom.id,
       sender_id: user.id,
       sender_nickname: user.nickname,
-      content: newMessage.trim()
-    })
+      content,
+      created_at: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, tempMessage])
+    scrollToBottom()
+
+    const { data, error } = await supabase.from('messages').insert({
+      room_id: selectedRoom.id,
+      sender_id: user.id,
+      sender_nickname: user.nickname,
+      content
+    }).select().single()
 
     if (!error) {
+      // 임시 메시지를 실제 메시지로 교체
+      if (data) {
+        setMessages(prev => prev.map(m => m.id === tempMessage.id ? (data as Message) : m))
+      }
       await supabase.from('chat_rooms').update({
-        last_message: newMessage.trim(),
+        last_message: content,
         last_message_at: new Date().toISOString()
       }).eq('id', selectedRoom.id)
 
@@ -127,8 +152,10 @@ export default function ChatList({ user, initialRoomId, onClose }: Props) {
         userId: otherId, actorId: user.id, actorNickname: user.nickname,
         type: 'chat', targetTitle: selectedRoom.post_title ?? undefined,
       })
-
-      setNewMessage('')
+    } else {
+      // 실패 시 임시 메시지 제거
+      setMessages(prev => prev.filter(m => m.id !== tempMessage.id))
+      setNewMessage(content)
     }
     setSending(false)
   }

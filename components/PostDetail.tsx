@@ -71,18 +71,38 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
   async function handleComment() {
     if (!user) { onRequireAuth(); return }
     if (!newComment.trim()) return
+    const content = newComment.trim()
     setCommentLoading(true)
-    const { error } = await supabase.from('comments').insert({
-      post_id: post.id, user_id: user.id, nickname: user.nickname, content: newComment.trim(),
-    })
+    setNewComment('')
+
+    // 즉시 화면에 반영
+    const tempComment: Comment = {
+      id: `temp-${Date.now()}`,
+      post_id: post.id,
+      user_id: user.id,
+      nickname: user.nickname,
+      content,
+      created_at: new Date().toISOString(),
+    }
+    setComments(prev => [...prev, tempComment])
+
+    const { data: inserted, error } = await supabase.from('comments').insert({
+      post_id: post.id, user_id: user.id, nickname: user.nickname, content,
+    }).select().single()
+
     if (!error) {
-      const { data } = await supabase.from('comments').select('*').eq('post_id', post.id).order('created_at', { ascending: true })
-      if (data) { setComments(data); await supabase.from('posts').update({ comment_count: data.length }).eq('id', post.id) }
-      setNewComment('')
+      if (inserted) {
+        setComments(prev => prev.map(c => c.id === tempComment.id ? (inserted as Comment) : c))
+      }
+      await supabase.from('posts').update({ comment_count: comments.length + 1 }).eq('id', post.id)
       if (post.user_id) notify({
         userId: post.user_id, actorId: user.id, actorNickname: user.nickname,
         type: 'comment', targetType: 'post', targetId: post.id, targetTitle: post.title,
       })
+    } else {
+      // 실패 시 제거
+      setComments(prev => prev.filter(c => c.id !== tempComment.id))
+      setNewComment(content)
     }
     setCommentLoading(false)
   }
