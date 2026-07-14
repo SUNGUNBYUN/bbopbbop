@@ -16,9 +16,10 @@ type FeedComment = {
   created_at: string
 }
 
-type Props = { user: User | null; onRequireAuth: () => void }
+type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
+type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat }
 
-export default function FeedTab({ user, onRequireAuth }: Props) {
+export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [feeds, setFeeds] = useState<FeedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -63,7 +64,7 @@ export default function FeedTab({ user, onRequireAuth }: Props) {
   }
 
   if (selected) {
-    return <FeedDetail feed={selected} user={user} liked={likedFeeds.has(selected.id)} onToggleLike={() => handleLike(selected)} onBack={() => { setSelected(null); fetchFeeds() }} onRequireAuth={onRequireAuth} />
+    return <FeedDetail feed={selected} user={user} liked={likedFeeds.has(selected.id)} onToggleLike={() => handleLike(selected)} onBack={() => { setSelected(null); fetchFeeds() }} onRequireAuth={onRequireAuth} onOpenChat={onOpenChat} />
   }
   if (showForm && user) {
     return <FeedForm user={user} onClose={() => setShowForm(false)} onSubmitted={() => { setShowForm(false); fetchFeeds() }} />
@@ -124,8 +125,8 @@ export default function FeedTab({ user, onRequireAuth }: Props) {
   )
 }
 
-function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth }: {
-  feed: FeedPost; user: User | null; liked: boolean; onToggleLike: () => void; onBack: () => void; onRequireAuth: () => void
+function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, onOpenChat }: {
+  feed: FeedPost; user: User | null; liked: boolean; onToggleLike: () => void; onBack: () => void; onRequireAuth: () => void; onOpenChat: OpenChat
 }) {
   const [comments, setComments] = useState<FeedComment[]>([])
   const [newComment, setNewComment] = useState('')
@@ -203,9 +204,16 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth }: 
           </div>
           {feed.content && <p style={{ fontSize: '15px', color: 'var(--ink)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{feed.content}</p>}
 
-          <Button full size="lg" variant={myLiked ? 'primary' : 'soft'} onClick={toggleLike}>
-            {myLiked ? '❤️ 좋아요' : '🤍 좋아요'} {likeCount > 0 && likeCount}
-          </Button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button size="lg" variant={myLiked ? 'primary' : 'soft'} onClick={toggleLike} style={{ flex: 1 }}>
+              {myLiked ? '❤️ 좋아요' : '🤍 좋아요'} {likeCount > 0 && likeCount}
+            </Button>
+            {user?.id !== feed.user_id && (
+              <Button size="lg" variant="mint" onClick={() => onOpenChat(feed.user_id, feed.nickname, 'feed', feed.id, feed.content?.slice(0, 20) ?? '자랑글')} style={{ flex: 1 }}>
+                💬 채팅하기
+              </Button>
+            )}
+          </div>
 
           <div>
             <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 14px' }}>댓글 {comments.length > 0 && <span style={{ color: 'var(--coral)' }}>{comments.length}</span>}</h3>

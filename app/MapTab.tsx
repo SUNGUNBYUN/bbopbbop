@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { timeAgo } from '@/lib/utils'
+import { timeAgo, formatPrice, marketStatus } from '@/lib/utils'
 import { Spinner, EmptyState, Stat } from '@/components/ui'
 
 declare global {
@@ -23,33 +23,55 @@ type Post = {
   comment_count: number
 }
 
-type PlaceWithPosts = {
+type MarketPin = {
+  id: string
+  title: string
+  price: number | null
+  is_free: boolean
+  image_url: string | null
+  status: string
+  nickname: string | null
+  created_at: string
+  place_name: string | null
+  location: string | null
+  latitude: number | null
+  longitude: number | null
+  like_count: number
+  view_count: number
+}
+
+type PlaceWithItems = {
   place_name: string
   address: string
   lat: number
   lng: number
   posts: Post[]
+  markets: MarketPin[]
   isKakao: boolean
 }
 
 type Props = {
   onSelectPost: (post: Post) => void
+  onSelectMarket?: (marketId: string) => void
 }
 
-export default function MapTab({ onSelectPost }: Props) {
+export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const [loaded, setLoaded] = useState(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationStatus, setLocationStatus] = useState<'loading' | 'success' | 'fail'>('loading')
-  const [selectedPlace, setSelectedPlace] = useState<PlaceWithPosts | null>(null)
+  const [selectedPlace, setSelectedPlace] = useState<PlaceWithItems | null>(null)
+  const [sheetTab, setSheetTab] = useState<'posts' | 'markets'>('posts')
   const [posts, setPosts] = useState<Post[]>([])
+  const [markets, setMarkets] = useState<MarketPin[]>([])
   const overlaysRef = useRef<any[]>([])
   const [showResearch, setShowResearch] = useState(false)
   const [researching, setResearching] = useState(false)
 
   useEffect(() => {
     supabase.from('posts').select('*').then(({ data }) => { if (data) setPosts(data) })
+    supabase.from('market_items').select('*').neq('status', 'sold').then(({ data }) => { if (data) setMarkets(data) })
 
     if (window.kakao && window.kakao.maps && window.kakao.maps.Map) {
       setLoaded(true)
@@ -82,7 +104,7 @@ export default function MapTab({ onSelectPost }: Props) {
   useEffect(() => {
     if (!loaded || !userLocation || !mapContainerRef.current) return
     initMap()
-  }, [loaded, userLocation])
+  }, [loaded, userLocation, posts, markets])
 
   function initMap() {
     if (!userLocation || !mapContainerRef.current) return
@@ -104,12 +126,15 @@ export default function MapTab({ onSelectPost }: Props) {
 
     searchNearbyPlaces(map, userLocation)
 
-    window.kakao.maps.event.addListener(map, 'dragend', () => {
-      setShowResearch(true)
-    })
-    window.kakao.maps.event.addListener(map, 'zoom_changed', () => {
-      setShowResearch(true)
-    })
+    window.kakao.maps.event.addListener(map, 'dragend', () => setShowResearch(true))
+    window.kakao.maps.event.addListener(map, 'zoom_changed', () => setShowResearch(true))
+  }
+
+  function matchPosts(placeName: string): Post[] {
+    return posts.filter(p => p.place_name === placeName || (p.location ?? '').includes(placeName))
+  }
+  function matchMarkets(placeName: string): MarketPin[] {
+    return markets.filter(m => m.place_name === placeName || (m.location ?? '').includes(placeName))
   }
 
   function searchNearbyPlaces(map: any, location: { lat: number; lng: number }) {
@@ -117,81 +142,96 @@ export default function MapTab({ onSelectPost }: Props) {
     const center = new window.kakao.maps.LatLng(location.lat, location.lng)
 
     ps.keywordSearch('인형뽑기', (kakaoPlaces: any[], status: string) => {
-      if (status !== window.kakao.maps.services.Status.OK) { addMarkers(map, bbopOnly()); return }
+      const places: PlaceWithItems[] = []
 
-      const placesWithPosts: PlaceWithPosts[] = kakaoPlaces.map((kp: any) => {
-        const matchedPosts = posts.filter(p =>
-          p.place_name === kp.place_name || (p.location ?? '').includes(kp.place_name)
-        )
-        return {
-          place_name: kp.place_name,
-          address: kp.road_address_name || kp.address_name,
-          lat: parseFloat(kp.y), lng: parseFloat(kp.x),
-          posts: matchedPosts, isKakao: true,
+      if (status === window.kakao.maps.services.Status.OK) {
+        kakaoPlaces.forEach((kp: any) => {
+          places.push({
+            place_name: kp.place_name,
+            address: kp.road_address_name || kp.address_name,
+            lat: parseFloat(kp.y), lng: parseFloat(kp.x),
+            posts: matchPosts(kp.place_name),
+            markets: matchMarkets(kp.place_name),
+            isKakao: true,
+          })
+        })
+      }
+
+      // 카카오에 없는 자체 등록 업체 (제보 기준)
+      const kakaoNames = new Set(places.map(p => p.place_name))
+      const customPlaces = new Map<string, PlaceWithItems>()
+
+      posts.forEach(p => {
+        const key = p.place_name ?? p.location ?? ''
+        if (!key || kakaoNames.has(key) || !p.latitude || !p.longitude) return
+        if (!customPlaces.has(key)) {
+          customPlaces.set(key, {
+            place_name: key, address: p.location ?? '',
+            lat: p.latitude, lng: p.longitude,
+            posts: [], markets: matchMarkets(key), isKakao: false,
+          })
+        }
+        customPlaces.get(key)!.posts.push(p)
+      })
+
+      markets.forEach(m => {
+        const key = m.place_name ?? m.location ?? ''
+        if (!key || kakaoNames.has(key) || !m.latitude || !m.longitude) return
+        if (!customPlaces.has(key)) {
+          customPlaces.set(key, {
+            place_name: key, address: m.location ?? '',
+            lat: m.latitude, lng: m.longitude,
+            posts: [], markets: [], isKakao: false,
+          })
+          customPlaces.get(key)!.markets.push(m)
+        } else if (!customPlaces.get(key)!.markets.some(x => x.id === m.id)) {
+          customPlaces.get(key)!.markets.push(m)
         }
       })
 
-      const bbopPosts = posts.filter(p =>
-        p.latitude && p.longitude &&
-        !kakaoPlaces.some((kp: any) => p.place_name === kp.place_name)
-      )
-      const bbopPlaces: PlaceWithPosts[] = bbopPosts.map(p => ({
-        place_name: p.place_name ?? p.location ?? '업체',
-        address: p.location ?? '', lat: p.latitude!, lng: p.longitude!,
-        posts: [p], isKakao: false,
-      }))
-
-      addMarkers(map, [...placesWithPosts, ...bbopPlaces])
+      addMarkers(map, [...places, ...Array.from(customPlaces.values())])
     }, { location: center, radius: 2000, size: 15 })
   }
 
-  function bbopOnly(): PlaceWithPosts[] {
-    return posts.filter(p => p.latitude && p.longitude).map(p => ({
-      place_name: p.place_name ?? p.location ?? '업체',
-      address: p.location ?? '', lat: p.latitude!, lng: p.longitude!,
-      posts: [p], isKakao: false,
-    }))
-  }
-
-  function addMarkers(map: any, places: PlaceWithPosts[]) {
+  function addMarkers(map: any, places: PlaceWithItems[]) {
     overlaysRef.current.forEach(o => o.setMap(null))
     overlaysRef.current = []
 
     places.forEach(place => {
       const position = new window.kakao.maps.LatLng(place.lat, place.lng)
-      const postCount = place.posts.length
-      const hasPost = postCount > 0
+      const totalCount = place.posts.length + place.markets.length
+      const hasItem = totalCount > 0
 
-      const markerContent = `
-        <div class="bbop-marker" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-          <div style="position:relative;">
-            <div style="width:40px;height:40px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);
-              background:${hasPost ? '#FF5A5F' : '#fff'};
-              border:2.5px solid ${hasPost ? '#FF5A5F' : '#E2DED8'};
-              display:flex;align-items:center;justify-content:center;
-              box-shadow:0 4px 12px rgba(26,21,35,0.18);">
-              <span style="transform:rotate(45deg);font-size:18px;">🧸</span>
-            </div>
-            ${hasPost ? `<div style="position:absolute;top:-6px;right:-8px;background:#FFC93C;color:#1A1523;
-              border-radius:10px;padding:1px 6px;font-size:11px;font-weight:800;border:2px solid #fff;">${postCount}</div>` : ''}
+      const el = document.createElement('div')
+      el.className = 'bbop-marker'
+      el.style.cssText = 'display:flex;flex-direction:column;align-items:center;cursor:pointer;'
+      el.innerHTML = `
+        <div style="position:relative;">
+          <div style="width:40px;height:40px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);
+            background:${hasItem ? '#FF5A5F' : '#fff'};
+            border:2.5px solid ${hasItem ? '#FF5A5F' : '#E2DED8'};
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 4px 12px rgba(26,21,35,0.18);">
+            <span style="transform:rotate(45deg);font-size:18px;">🧸</span>
           </div>
-          <div style="font-size:10.5px;color:#1A1523;margin-top:5px;background:rgba(255,255,255,0.95);
-            padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:90px;overflow:hidden;
-            text-overflow:ellipsis;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.1);">${place.place_name}</div>
-        </div>`
+          ${hasItem ? `<div style="position:absolute;top:-6px;right:-8px;background:#FFC93C;color:#1A1523;
+            border-radius:10px;padding:1px 6px;font-size:11px;font-weight:800;border:2px solid #fff;">${totalCount}</div>` : ''}
+        </div>
+        <div style="font-size:10.5px;color:#1A1523;margin-top:5px;background:rgba(255,255,255,0.95);
+          padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:90px;overflow:hidden;
+          text-overflow:ellipsis;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.1);">${place.place_name}</div>`
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        setSheetTab(place.posts.length > 0 ? 'posts' : (place.markets.length > 0 ? 'markets' : 'posts'))
+        setSelectedPlace(place)
+      })
 
       const overlay = new window.kakao.maps.CustomOverlay({
-        position, content: markerContent, yAnchor: 1.15, xAnchor: 0.5,
+        position, content: el, yAnchor: 1.15, xAnchor: 0.5, clickable: true,
       })
       overlay.setMap(map)
       overlaysRef.current.push(overlay)
-
-      setTimeout(() => {
-        const el = overlay.getContent()
-        if (el && typeof el !== 'string') {
-          el.addEventListener('click', () => setSelectedPlace(place))
-        }
-      }, 100)
     })
   }
 
@@ -200,8 +240,7 @@ export default function MapTab({ onSelectPost }: Props) {
     setResearching(true)
     setShowResearch(false)
     const center = mapRef.current.getCenter()
-    const location = { lat: center.getLat(), lng: center.getLng() }
-    searchNearbyPlaces(mapRef.current, location)
+    searchNearbyPlaces(mapRef.current, { lat: center.getLat(), lng: center.getLng() })
     setTimeout(() => setResearching(false), 1500)
   }
 
@@ -233,54 +272,22 @@ export default function MapTab({ onSelectPost }: Props) {
         )}
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
 
-        {/* 이 위치에서 재검색 버튼 */}
         {loaded && showResearch && (
-          <button
-            onClick={researchCurrentArea}
-            className="pressable"
-            style={{
-              position: 'absolute', top: '14px', left: '50%', transform: 'translateX(-50%)',
-              zIndex: 10, padding: '9px 18px', borderRadius: 'var(--r-full)',
-              background: 'var(--surface)', border: 'none', boxShadow: 'var(--shadow-lg)',
-              fontSize: '13px', fontWeight: 700, color: 'var(--ink)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
-            }}
-          >
+          <button onClick={researchCurrentArea} className="pressable" style={{ position: 'absolute', top: '14px', left: '50%', transform: 'translateX(-50%)', zIndex: 10, padding: '9px 18px', borderRadius: 'var(--r-full)', background: 'var(--surface)', border: 'none', boxShadow: 'var(--shadow-lg)', fontSize: '13px', fontWeight: 700, color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
             {researching ? '🔍 검색 중...' : '🔍 이 위치에서 검색'}
           </button>
         )}
 
-        {/* 내 위치 버튼 */}
         {loaded && (
-          <button
-            onClick={recenter}
-            className="pressable"
-            aria-label="내 위치로"
-            style={{
-              position: 'absolute', bottom: '18px', right: '16px', zIndex: 10,
-              width: '46px', height: '46px', borderRadius: '50%', background: 'var(--surface)',
-              border: 'none', boxShadow: 'var(--shadow-md)', fontSize: '20px', cursor: 'pointer',
-            }}
-          >🎯</button>
+          <button onClick={recenter} className="pressable" aria-label="내 위치로" style={{ position: 'absolute', bottom: '18px', right: '16px', zIndex: 10, width: '46px', height: '46px', borderRadius: '50%', background: 'var(--surface)', border: 'none', boxShadow: 'var(--shadow-md)', fontSize: '20px', cursor: 'pointer' }}>🎯</button>
         )}
       </div>
 
       {selectedPlace && (
-        <div
-          onClick={() => setSelectedPlace(null)}
-          style={{ position: 'absolute', inset: 0, zIndex: 15, display: 'flex', alignItems: 'flex-end' }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="animate-slide-up"
-            style={{
-              width: '100%', background: 'var(--surface)', borderRadius: 'var(--r-xl) var(--r-xl) 0 0',
-              padding: '8px 20px 24px', maxHeight: '55%', overflowY: 'auto',
-              boxShadow: '0 -8px 32px rgba(26,21,35,0.14)',
-            }}
-          >
+        <div onClick={() => setSelectedPlace(null)} style={{ position: 'absolute', inset: 0, zIndex: 15, display: 'flex', alignItems: 'flex-end' }}>
+          <div onClick={(e) => e.stopPropagation()} className="animate-slide-up" style={{ width: '100%', background: 'var(--surface)', borderRadius: 'var(--r-xl) var(--r-xl) 0 0', padding: '8px 20px 24px', maxHeight: '60%', overflowY: 'auto', boxShadow: '0 -8px 32px rgba(26,21,35,0.14)' }}>
             <div style={{ width: '40px', height: '4px', background: 'var(--surface-3)', borderRadius: 'var(--r-full)', margin: '0 auto 16px' }} />
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--ink)', margin: '0 0 4px' }}>{selectedPlace.place_name}</h3>
                 <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{selectedPlace.address}</p>
@@ -288,32 +295,60 @@ export default function MapTab({ onSelectPost }: Props) {
               <button onClick={() => setSelectedPlace(null)} style={{ fontSize: '18px', background: 'var(--surface-2)', border: 'none', width: '30px', height: '30px', borderRadius: '50%', cursor: 'pointer', color: 'var(--ink-3)', flexShrink: 0 }}>✕</button>
             </div>
 
-            {selectedPlace.posts.length === 0 ? (
-              <EmptyState emoji="🕳️" title="아직 제보가 없어요" desc="이 업체의 첫 제보를 남겨보세요!" />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-                {selectedPlace.posts.map(post => (
-                  <div
-                    key={post.id}
-                    onClick={() => { setSelectedPlace(null); onSelectPost(post) }}
-                    className="pressable"
-                    style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '10px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', cursor: 'pointer' }}
-                  >
-                    <div style={{ width: '54px', height: '54px', borderRadius: 'var(--r-sm)', overflow: 'hidden', flexShrink: 0, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {post.image_url ? <img src={post.image_url} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '24px' }}>🧸</span>}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.title}</p>
-                      <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: '0 0 4px' }}>{post.nickname ?? '익명'} · {timeAgo(post.created_at)}</p>
-                      <div style={{ display: 'flex', gap: '9px' }}>
-                        <Stat icon="👁" value={post.view_count ?? 0} />
-                        <Stat icon="❤️" value={post.like_count ?? 0} />
-                        <Stat icon="💬" value={post.comment_count ?? 0} />
+            {/* 탭 */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+              <button onClick={() => setSheetTab('posts')} style={{ flex: 1, padding: '9px', borderRadius: 'var(--r-md)', border: 'none', cursor: 'pointer', fontSize: '13.5px', fontWeight: 700, background: sheetTab === 'posts' ? 'var(--coral)' : 'var(--surface-2)', color: sheetTab === 'posts' ? '#fff' : 'var(--ink-3)' }}>
+                🔍 제보 {selectedPlace.posts.length > 0 && selectedPlace.posts.length}
+              </button>
+              <button onClick={() => setSheetTab('markets')} style={{ flex: 1, padding: '9px', borderRadius: 'var(--r-md)', border: 'none', cursor: 'pointer', fontSize: '13.5px', fontWeight: 700, background: sheetTab === 'markets' ? 'var(--coral)' : 'var(--surface-2)', color: sheetTab === 'markets' ? '#fff' : 'var(--ink-3)' }}>
+                🛍️ 마켓 {selectedPlace.markets.length > 0 && selectedPlace.markets.length}
+              </button>
+            </div>
+
+            {sheetTab === 'posts' ? (
+              selectedPlace.posts.length === 0 ? (
+                <EmptyState emoji="🕳️" title="아직 제보가 없어요" desc="이 업체의 첫 제보를 남겨보세요!" />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                  {selectedPlace.posts.map(post => (
+                    <div key={post.id} onClick={() => { setSelectedPlace(null); onSelectPost(post) }} className="pressable" style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '10px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', cursor: 'pointer' }}>
+                      <div style={{ width: '54px', height: '54px', borderRadius: 'var(--r-sm)', overflow: 'hidden', flexShrink: 0, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {post.image_url ? <img src={post.image_url} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '24px' }}>🧸</span>}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.title}</p>
+                        <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: '0 0 4px' }}>{post.nickname ?? '익명'} · {timeAgo(post.created_at)}</p>
+                        <div style={{ display: 'flex', gap: '9px' }}>
+                          <Stat icon="👁" value={post.view_count ?? 0} />
+                          <Stat icon="❤️" value={post.like_count ?? 0} />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              selectedPlace.markets.length === 0 ? (
+                <EmptyState emoji="🛍️" title="등록된 상품이 없어요" desc="여기서 뽑은 인형을 팔아보세요!" />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                  {selectedPlace.markets.map(m => {
+                    const badge = marketStatus(m.status)
+                    return (
+                      <div key={m.id} onClick={() => { setSelectedPlace(null); onSelectMarket?.(m.id) }} className="pressable" style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '10px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', cursor: 'pointer' }}>
+                        <div style={{ width: '54px', height: '54px', borderRadius: 'var(--r-sm)', overflow: 'hidden', flexShrink: 0, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {m.image_url ? <img src={m.image_url} alt={m.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '24px' }}>🧸</span>}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</p>
+                          <p style={{ fontSize: '14px', fontWeight: 800, color: m.is_free ? 'var(--success)' : 'var(--ink)', margin: '0 0 3px' }}>{formatPrice(m.price, m.is_free)}</p>
+                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 7px', borderRadius: 'var(--r-full)' }}>{badge.text}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
             )}
           </div>
         </div>

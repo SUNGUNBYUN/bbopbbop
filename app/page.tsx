@@ -5,6 +5,7 @@ import { Post, User } from '@/lib/types'
 import { Logo } from '@/components/Logo'
 import { IconButton, Toast } from '@/components/ui'
 import { unreadCount } from '@/lib/social'
+import { startOrGetChat } from '@/lib/chat'
 import { NotificationList } from '@/components/NotificationList'
 import { Onboarding } from '@/components/Onboarding'
 import { useOnboarding } from '@/lib/useOnboarding'
@@ -25,6 +26,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState(0)
 
+  // 화면 오버레이 상태
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
@@ -56,6 +58,7 @@ export default function Home() {
     })
   }
 
+  // 안 읽은 알림 개수 (로그인 시 + 30초마다)
   useEffect(() => {
     if (!user) { setUnread(0); return }
     let alive = true
@@ -77,23 +80,35 @@ export default function Home() {
     setLoading(false)
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    setUser(null)
+    showToast('로그아웃 되었어요', '👋')
+  }
+
   function requireAuth() { setShowAuth(true) }
 
   async function startChat() {
     if (!user || !selectedPost || !selectedPost.user_id) return
-    if (selectedPost.user_id === user.id) return
-    const { data: existing } = await supabase.from('chat_rooms').select('*')
-      .or(`and(user1_id.eq.${user.id},user2_id.eq.${selectedPost.user_id}),and(user1_id.eq.${selectedPost.user_id},user2_id.eq.${user.id})`)
-      .limit(1)
-    if (existing && existing.length > 0) { setChatRoomId(existing[0].id); setShowChat(true); return }
-    const { data: newRoom, error } = await supabase.from('chat_rooms').insert({
-      user1_id: user.id, user2_id: selectedPost.user_id,
-      user1_nickname: user.nickname, user2_nickname: selectedPost.nickname,
-      post_id: selectedPost.id, post_title: selectedPost.title,
-    }).select().single()
-    if (!error && newRoom) { setChatRoomId(newRoom.id); setShowChat(true) }
+    const roomId = await startOrGetChat({
+      myId: user.id, myNickname: user.nickname,
+      otherId: selectedPost.user_id, otherNickname: selectedPost.nickname,
+      sourceType: 'post', sourceId: selectedPost.id, sourceTitle: selectedPost.title,
+    })
+    if (roomId) { setChatRoomId(roomId); setShowChat(true) }
   }
 
+  // 마켓·피드 등 어디서든 채팅 시작
+  async function openChatWith(otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) {
+    if (!user) { requireAuth(); return }
+    const roomId = await startOrGetChat({
+      myId: user.id, myNickname: user.nickname,
+      otherId, otherNickname, sourceType, sourceId, sourceTitle,
+    })
+    if (roomId) { setChatRoomId(roomId); setShowChat(true) }
+  }
+
+  // ===== 제보 상세 =====
   if (selectedPost) {
     return (
       <div className="app-shell">
@@ -113,6 +128,7 @@ export default function Home() {
     )
   }
 
+  // ===== 제보 작성 =====
   if (showForm && user) {
     return (
       <div className="app-shell">
@@ -125,15 +141,19 @@ export default function Home() {
     )
   }
 
+  // ===== 메인 =====
   return (
     <div className="app-shell">
+      {/* 헤더 */}
       <header style={{
         height: 'var(--header-h)', padding: '0 16px', flexShrink: 0,
         borderBottom: '1px solid var(--line)', background: 'var(--surface)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 20,
       }}>
-        <Logo />
+        <div onClick={() => { setActiveTab(0); setSelectedPost(null); setShowForm(false); setShowMyPage(false); setShowChat(false); setShowNotifications(false) }} style={{ cursor: 'pointer' }}>
+          <Logo />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
           {user && (
             <IconButton onClick={() => setShowNotifications(true)} badge={unread} aria-label="알림">
@@ -161,6 +181,7 @@ export default function Home() {
         </div>
       </header>
 
+      {/* 탭 콘텐츠 */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
         {activeTab === 0 && (
           <HomeTab
@@ -170,14 +191,17 @@ export default function Home() {
             onNewPost={() => { if (!user) { requireAuth(); return }; setShowForm(true) }}
           />
         )}
-        {activeTab === 1 && <MapTab onSelectPost={(p) => setSelectedPost(p as Post)} />}
-        {activeTab === 2 && <MarketTab user={user} onRequireAuth={requireAuth} />}
-        {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} />}
+        {activeTab === 1 && <MapTab onSelectPost={(p) => setSelectedPost(p as Post)} onSelectMarket={() => setActiveTab(2)} />}
+        {activeTab === 2 && <MarketTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} />}
+        {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} />}
+        {/* FAB — 제보 탭에서만 */}
         {activeTab === 0 && <FAB onClick={() => { if (!user) { requireAuth(); return }; setShowForm(true) }} />}
       </div>
 
+      {/* 하단 네비 */}
       <BottomNav active={activeTab} onChange={setActiveTab} />
 
+      {/* 오버레이 */}
       {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
       {showMyPage && user && <MyPage user={user} onClose={() => setShowMyPage(false)} onSelectPost={(p) => { setShowMyPage(false); setSelectedPost(p) }} />}
       {showNotifications && user && (

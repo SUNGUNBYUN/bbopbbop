@@ -56,6 +56,9 @@ export type MarketItem = {
   user_id: string
   nickname: string | null
   location: string | null
+  latitude: number | null
+  longitude: number | null
+  place_name: string | null
   view_count: number
   like_count: number
   created_at: string

@@ -1,17 +1,19 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { User, MarketItem } from '@/lib/types'
+import { User, MarketItem, Place } from '@/lib/types'
 import { timeAgo, formatPrice, tradeTypeText, marketStatus } from '@/lib/utils'
 import { notify } from '@/lib/social'
 import { Header, BackButton, IconButton, Avatar, Button, Input, Field, Badge, Stat, EmptyState } from '@/components/ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from '@/components/MultiImageUploader'
 import { ImageGallery } from '@/components/ImageGallery'
 import { ReportSheet } from '@/components/ReportSheet'
+import { PlaceSearchSheet } from '@/components/PlaceSearchSheet'
 
-type Props = { user: User | null; onRequireAuth: () => void }
+type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
+type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat }
 
-export default function MarketTab({ user, onRequireAuth }: Props) {
+export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [items, setItems] = useState<MarketItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -30,7 +32,7 @@ export default function MarketTab({ user, onRequireAuth }: Props) {
   const filtered = items.filter(i => i.title.includes(search))
 
   if (selected) {
-    return <MarketDetail item={selected} user={user} onBack={() => { setSelected(null); fetchItems() }} onRequireAuth={onRequireAuth} />
+    return <MarketDetail item={selected} user={user} onBack={() => { setSelected(null); fetchItems() }} onRequireAuth={onRequireAuth} onOpenChat={onOpenChat} />
   }
   if (showForm && user) {
     return <MarketForm user={user} onClose={() => setShowForm(false)} onSubmitted={() => { setShowForm(false); fetchItems() }} />
@@ -99,7 +101,7 @@ async function openDetail(item: MarketItem, setSelected: (i: MarketItem) => void
   setSelected(item)
 }
 
-function MarketDetail({ item, user, onBack, onRequireAuth }: { item: MarketItem; user: User | null; onBack: () => void; onRequireAuth: () => void }) {
+function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item: MarketItem; user: User | null; onBack: () => void; onRequireAuth: () => void; onOpenChat: OpenChat }) {
   const [comments, setComments] = useState<any[]>([])
   const [newComment, setNewComment] = useState('')
   const [myLiked, setMyLiked] = useState(false)
@@ -107,6 +109,7 @@ function MarketDetail({ item, user, onBack, onRequireAuth }: { item: MarketItem;
   const [status, setStatus] = useState(item.status)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
+  const [chatCount, setChatCount] = useState(0)
   const isMine = user?.id === item.user_id
   const badge = marketStatus(status)
   const gallery = (item.images && item.images.length > 0) ? item.images : (item.image_url ? [item.image_url] : [])
@@ -115,9 +118,10 @@ function MarketDetail({ item, user, onBack, onRequireAuth }: { item: MarketItem;
     supabase.from('market_likes').select('*').eq('item_id', item.id).then(({ data }) => {
       if (data) { setLikeCount(data.length); if (user) setMyLiked(data.some(l => l.user_id === user.id)) }
     })
-    supabase.from('market_comments').select('*').eq('item_id', item.id).order('created_at', { ascending: true }).then(({ data }) => {
-      if (data) setComments(data)
-    })
+    // 이 상품으로 시작된 채팅방 수
+    supabase.from('chat_rooms').select('id', { count: 'exact', head: true })
+      .eq('source_type', 'market').eq('source_id', item.id)
+      .then(({ count }) => { if (count != null) setChatCount(count) })
   }, [item.id])
 
   async function handleLike() {
@@ -203,7 +207,7 @@ function MarketDetail({ item, user, onBack, onRequireAuth }: { item: MarketItem;
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '12px' }}>
               <Stat icon="👁" value={item.view_count} />
               <Stat icon="❤️" value={likeCount} />
-              <Stat icon="💬" value={comments.length} />
+              <Stat icon="💬" value={chatCount} />
               <Stat icon="🚚" value={tradeTypeText(item.trade_type)} />
             </div>
           </div>
@@ -231,36 +235,19 @@ function MarketDetail({ item, user, onBack, onRequireAuth }: { item: MarketItem;
             </div>
           )}
 
-          <Button full size="lg" variant={myLiked ? 'primary' : 'soft'} onClick={handleLike}>
-            {myLiked ? '🧡 찜했어요' : '🤍 찜하기'} {likeCount > 0 && likeCount}
-          </Button>
-
-          <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 14px' }}>문의 {comments.length > 0 && <span style={{ color: 'var(--coral)' }}>{comments.length}</span>}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {comments.length === 0 ? (
-                <p style={{ fontSize: '13px', color: 'var(--ink-4)', textAlign: 'center', padding: '24px 0' }}>판매자에게 궁금한 걸 물어보세요 😊</p>
-              ) : comments.map(c => (
-                <div key={c.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <Avatar name={c.nickname} size={30} color="var(--ink-3)" />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-2)' }}>{c.nickname ?? '익명'}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--ink-4)' }}>{timeAgo(c.created_at)}</span>
-                    </div>
-                    <p style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5 }}>{c.content}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+          {/* 찜 + 채팅 버튼 (내 상품이 아닐 때만 채팅) */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button size="lg" variant={myLiked ? 'primary' : 'soft'} onClick={handleLike} style={{ flex: 1 }}>
+              {myLiked ? '🧡 찜했어요' : '🤍 찜하기'} {likeCount > 0 && likeCount}
+            </Button>
+            {!isMine && (
+              <Button size="lg" variant="mint" onClick={() => onOpenChat(item.user_id, item.nickname, 'market', item.id, item.title)} style={{ flex: 1 }}>
+                💬 채팅하기
+              </Button>
+            )}
           </div>
         </div>
       </main>
-
-      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', gap: '8px', background: 'var(--surface)', flexShrink: 0 }}>
-        <Input placeholder={user ? '문의하기...' : '로그인 후 문의'} value={newComment} onChange={(e) => setNewComment(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleComment()} style={{ flex: 1, padding: '11px 14px' }} />
-        <Button onClick={handleComment} disabled={!newComment.trim()} variant={newComment.trim() ? 'primary' : 'outline'} style={{ flexShrink: 0 }}>등록</Button>
-      </div>
 
       {showReport && (
         <ReportSheet user={user} targetType="market" targetId={item.id} targetUserId={item.user_id} targetNickname={item.nickname} onClose={() => setShowReport(false)} onRequireAuth={onRequireAuth} onDone={(msg) => { setShowReport(false); alert(msg) }} />
@@ -278,6 +265,19 @@ function MarketForm({ user, onClose, onSubmitted }: { user: User; onClose: () =>
   const [images, setImages] = useState<ImageSlot[]>([])
   const [uploading, setUploading] = useState(false)
   const [errors, setErrors] = useState<{ image?: string; title?: string; price?: string }>({})
+  const [placeName, setPlaceName] = useState('')
+  const [placeAddr, setPlaceAddr] = useState('')
+  const [placeLat, setPlaceLat] = useState<number | null>(null)
+  const [placeLng, setPlaceLng] = useState<number | null>(null)
+  const [showPlaceSearch, setShowPlaceSearch] = useState(false)
+
+  function handlePlaceSelect(place: Place) {
+    setPlaceName(place.place_name)
+    setPlaceAddr(place.road_address_name || place.address_name)
+    setPlaceLat(parseFloat(place.y))
+    setPlaceLng(parseFloat(place.x))
+    setShowPlaceSearch(false)
+  }
 
   function validate() {
     const e: typeof errors = {}
@@ -295,6 +295,8 @@ function MarketForm({ user, onClose, onSubmitted }: { user: User; onClose: () =>
       title, description, price: isFree ? 0 : parseInt(price) || 0, is_free: isFree,
       trade_type: tradeType, image_url: urls[0] ?? null, images: urls,
       user_id: user.id, nickname: user.nickname,
+      place_name: placeName || null, location: placeAddr || null,
+      latitude: placeLat, longitude: placeLng,
     })
     setUploading(false)
     if (!error) onSubmitted()
@@ -327,10 +329,26 @@ function MarketForm({ user, onClose, onSubmitted }: { user: User; onClose: () =>
             ))}
           </div>
         </Field>
+        <Field label="어디서 뽑았어요?" optional>
+          {placeName ? (
+            <div style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)', position: 'relative' }}>
+              <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px', paddingRight: '32px' }}>📍 {placeName}</p>
+              {placeAddr && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{placeAddr}</p>}
+              <button onClick={() => { setPlaceName(''); setPlaceAddr(''); setPlaceLat(null); setPlaceLng(null) }} style={{ position: 'absolute', top: '12px', right: '12px', width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(255,255,255,0.8)', color: 'var(--ink-3)', fontSize: '13px', border: 'none', cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowPlaceSearch(true)} className="pressable" style={{ width: '100%', padding: '14px 15px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '15px', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', color: 'var(--ink-4)', display: 'flex', alignItems: 'center', gap: '8px' }}>🔍 뽑은 장소 검색하기</button>
+          )}
+        </Field>
+
         <Field label="설명" optional>
           <textarea placeholder="상품 상태, 거래 희망 장소 등을 적어주세요" value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: '100%', padding: '13px 15px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '14.5px', outline: 'none', minHeight: '110px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
         </Field>
       </main>
+
+      {showPlaceSearch && (
+        <PlaceSearchSheet user={user} onSelect={handlePlaceSelect} onClose={() => setShowPlaceSearch(false)} />
+      )}
     </div>
   )
 }
