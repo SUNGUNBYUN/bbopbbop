@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Place, User } from '@/lib/types'
 import { PlaceRegister } from './PlaceRegister'
 
@@ -7,7 +7,7 @@ declare global {
   interface Window { kakao: any }
 }
 
-/** 업체 검색 + 직접 등록 시트 (제보/마켓 공용) */
+/** 업체 검색 + 지도 미리보기 + 직접 등록 (제보/마켓 공용) */
 export function PlaceSearchSheet({ user, onSelect, onClose }: {
   user: User
   onSelect: (place: Place) => void
@@ -18,6 +18,7 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
   const [showRegister, setShowRegister] = useState(false)
   const [kakaoReady, setKakaoReady] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [mapPreview, setMapPreview] = useState<Place | null>(null)
 
   useEffect(() => {
     if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
@@ -68,9 +69,14 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
     )
   }
 
+  // 지도 미리보기 화면
+  if (mapPreview) {
+    return <MapPreview place={mapPreview} onBack={() => setMapPreview(null)} onConfirm={() => onSelect(mapPreview)} />
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(26,21,35,0.5)', zIndex: 200, display: 'flex', alignItems: 'flex-end' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 'var(--app-max)', margin: '0 auto', background: 'var(--surface)', borderRadius: 'var(--r-xl) var(--r-xl) 0 0', padding: '20px', maxHeight: '70dvh', display: 'flex', flexDirection: 'column' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 'var(--app-max)', margin: '0 auto', background: 'var(--surface)', borderRadius: 'var(--r-xl) var(--r-xl) 0 0', padding: '20px', maxHeight: '75dvh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>업체 검색</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer' }}>✕</button>
@@ -90,10 +96,14 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
             <p style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: '13px', padding: '16px 0' }}>업체명으로 검색하거나<br/>아래에서 직접 등록하세요</p>
           )}
           {results.map((place, i) => (
-            <button key={i} onClick={() => onSelect(place)} style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+            <div key={i} style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)' }}>
               <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }}>{place.place_name}</p>
-              <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{place.road_address_name || place.address_name}</p>
-            </button>
+              <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: '0 0 10px' }}>{place.road_address_name || place.address_name}</p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setMapPreview(place)} style={{ flex: 1, padding: '9px', borderRadius: 'var(--r-sm)', border: '1.5px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>🗺️ 지도로 보기</button>
+                <button onClick={() => onSelect(place)} style={{ flex: 1, padding: '9px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--coral)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>선택</button>
+              </div>
+            </div>
           ))}
 
           <button
@@ -104,6 +114,50 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
             <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>지도에서 직접 위치를 등록해보세요</p>
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** 선택한 업체 위치를 지도로 확인 */
+function MapPreview({ place, onBack, onConfirm }: { place: Place; onBack: () => void; onConfirm: () => void }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!mapRef.current || !window.kakao?.maps) return
+    const lat = parseFloat(place.y)
+    const lng = parseFloat(place.x)
+    const center = new window.kakao.maps.LatLng(lat, lng)
+    const map = new window.kakao.maps.Map(mapRef.current, { center, level: 3 })
+
+    // 마커
+    const el = document.createElement('div')
+    el.style.cssText = 'display:flex;flex-direction:column;align-items:center;'
+    el.innerHTML = `
+      <div style="width:40px;height:40px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);
+        background:#FF5A5F;display:flex;align-items:center;justify-content:center;
+        box-shadow:0 4px 12px rgba(255,90,95,0.4);">
+        <span style="transform:rotate(45deg);font-size:18px;">🧸</span>
+      </div>`
+    new window.kakao.maps.CustomOverlay({ position: center, content: el, yAnchor: 1.1, xAnchor: 0.5 }).setMap(map)
+  }, [place])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface)', zIndex: 210, maxWidth: 'var(--app-max)', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
+      <header style={{ height: 'var(--header-h)', padding: '0 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        <button onClick={onBack} style={{ width: '40px', height: '40px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--ink-2)' }}>←</button>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{place.place_name}</p>
+          <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.road_address_name || place.address_name}</p>
+        </div>
+      </header>
+
+      <div ref={mapRef} style={{ flex: 1, width: '100%' }} />
+
+      <div style={{ padding: '16px', flexShrink: 0, borderTop: '1px solid var(--line)' }}>
+        <button onClick={onConfirm} className="pressable" style={{ width: '100%', padding: '15px', borderRadius: 'var(--r-md)', background: 'var(--coral)', color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)' }}>
+          ✓ 이 업체로 선택하기
+        </button>
       </div>
     </div>
   )
