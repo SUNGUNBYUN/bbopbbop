@@ -5,7 +5,7 @@ import { ClawMark } from '@/components/Logo'
 import { Button, Input, Field } from '@/components/ui'
 
 type Props = { onClose: () => void; onSuccess: () => void }
-type Step = 'input' | 'verify' | 'password'
+type Step = 'input' | 'verify'
 type Mode = 'login' | 'signup'
 
 export default function Auth({ onClose, onSuccess }: Props) {
@@ -14,7 +14,6 @@ export default function Auth({ onClose, onSuccess }: Props) {
   const [email, setEmail] = useState('')
   const [nickname, setNickname] = useState('')
   const [code, setCode] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [timer, setTimer] = useState(0)
@@ -33,50 +32,44 @@ export default function Auth({ onClose, onSuccess }: Props) {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
   }
 
-  async function handleLogin() {
-    if (!email || !password) { setError('이메일과 비밀번호를 입력해주세요'); return }
-    setLoading(true); setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (error) { setError('이메일 또는 비밀번호가 틀렸어요'); return }
-    onSuccess()
+  function isValidEmail(e: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
   }
 
+  // 인증번호(OTP) 발송 — Supabase가 이메일 전송
   async function handleSendCode() {
-    if (!email) { setError('이메일을 입력해주세요'); return }
-    if (!nickname) { setError('닉네임을 입력해주세요'); return }
+    if (!isValidEmail(email)) { setError('올바른 이메일을 입력해주세요'); return }
+    if (mode === 'signup' && !nickname.trim()) { setError('닉네임을 입력해주세요'); return }
     setLoading(true); setError('')
-    const res = await fetch('/api/auth/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        // 가입이면 닉네임 저장, 회원가입만 새 계정 생성 허용
+        shouldCreateUser: mode === 'signup',
+        data: mode === 'signup' ? { nickname: nickname.trim() } : undefined,
+      },
     })
-    const data = await res.json()
     setLoading(false)
-    if (!res.ok) { setError(data.error); return }
+    if (error) {
+      // 로그인인데 계정이 없을 때 등
+      if (error.message.includes('Signups not allowed') || error.message.toLowerCase().includes('user not found')) {
+        setError('가입되지 않은 이메일이에요. 회원가입을 먼저 해주세요')
+      } else {
+        setError('발송에 실패했어요. 잠시 후 다시 시도해주세요')
+      }
+      return
+    }
     setStep('verify')
     startTimer()
   }
 
+  // 인증번호 확인 → 로그인/가입 완료
   async function handleVerify() {
     if (code.length !== 6) { setError('6자리 인증번호를 입력해주세요'); return }
-    setStep('password')
-    setError('')
-  }
-
-  async function handleSignup() {
-    if (password.length < 6) { setError('비밀번호는 6자 이상이에요'); return }
     setLoading(true); setError('')
-    const res = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code, password, nickname }),
-    })
-    const data = await res.json()
-    if (!res.ok) { setError(data.error); setLoading(false); return }
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
     setLoading(false)
-    if (error) { setError('로그인 실패. 다시 시도해주세요'); return }
+    if (error) { setError('인증번호가 틀렸거나 만료됐어요'); return }
     onSuccess()
   }
 
@@ -86,34 +79,18 @@ export default function Auth({ onClose, onSuccess }: Props) {
 
         <div style={{ width: '40px', height: '4px', background: 'var(--surface-3)', borderRadius: 'var(--r-full)', margin: '0 auto' }} />
 
-        {/* 단계 바 */}
-        {mode === 'signup' && (
-          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-            {(['input', 'verify', 'password'] as Step[]).map((s, i) => (
-              <div key={i} style={{
-                height: '4px', borderRadius: '2px',
-                width: step === 'input' && i === 0 ? '24px' : step === 'verify' && i <= 1 ? '24px' : step === 'password' ? '24px' : '8px',
-                background: (step === 'input' && i === 0) || (step === 'verify' && i <= 1) || step === 'password' ? 'var(--coral)' : 'var(--surface-3)',
-                transition: 'all 0.2s ease',
-              }} />
-            ))}
-          </div>
-        )}
-
         {/* 헤더 */}
         <div style={{ textAlign: 'center' }}>
           <div style={{ display: 'inline-flex', marginBottom: '8px' }}><ClawMark size={40} animated /></div>
           <h2 style={{ fontSize: '19px', fontWeight: 800, margin: '0 0 3px', color: 'var(--ink)' }}>
-            {mode === 'login' ? '다시 만나서 반가워요'
-              : step === 'input' ? '뽑뽑에 오신 걸 환영해요'
-              : step === 'verify' ? '인증번호를 입력해주세요'
-              : '비밀번호를 설정해주세요'}
+            {step === 'verify' ? '인증번호를 입력해주세요'
+              : mode === 'login' ? '다시 만나서 반가워요'
+              : '뽑뽑에 오신 걸 환영해요'}
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--ink-3)', margin: 0 }}>
-            {mode === 'login' ? '로그인하고 제보를 남겨보세요'
-              : step === 'input' ? '이메일로 인증번호를 보내드려요'
-              : step === 'verify' ? `${email}로 발송된 6자리 코드`
-              : '6자 이상 입력해주세요'}
+            {step === 'verify' ? `${email}로 발송된 6자리 코드`
+              : mode === 'login' ? '이메일로 인증번호를 보내드려요'
+              : '이메일로 인증번호를 보내드려요'}
           </p>
         </div>
 
@@ -128,32 +105,22 @@ export default function Auth({ onClose, onSuccess }: Props) {
           </div>
         )}
 
-        {/* 로그인 */}
-        {mode === 'login' && (
+        {/* 입력 단계 */}
+        {step === 'input' && (
           <>
+            {mode === 'signup' && (
+              <Field label="닉네임" required>
+                <Input placeholder="예) 뽑기고수123" value={nickname} onChange={(e) => setNickname(e.target.value)} />
+              </Field>
+            )}
             <Field label="이메일" required>
-              <Input type="email" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </Field>
-            <Field label="비밀번호" required>
-              <Input type="password" placeholder="비밀번호 입력" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+              <Input type="email" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendCode()} />
             </Field>
           </>
         )}
 
-        {/* 가입 1단계 */}
-        {mode === 'signup' && step === 'input' && (
-          <>
-            <Field label="닉네임" required>
-              <Input placeholder="예) 뽑기고수123" value={nickname} onChange={(e) => setNickname(e.target.value)} />
-            </Field>
-            <Field label="이메일" required>
-              <Input type="email" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </Field>
-          </>
-        )}
-
-        {/* 가입 2단계 — 인증번호 */}
-        {mode === 'signup' && step === 'verify' && (
+        {/* 인증번호 단계 */}
+        {step === 'verify' && (
           <div>
             <Field label="인증번호" required>
               <Input
@@ -176,33 +143,16 @@ export default function Auth({ onClose, onSuccess }: Props) {
           </div>
         )}
 
-        {/* 가입 3단계 — 비밀번호 */}
-        {mode === 'signup' && step === 'password' && (
-          <Field label="비밀번호" required>
-            <Input type="password" placeholder="6자 이상 입력" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSignup()} />
-          </Field>
-        )}
-
         {error && <p style={{ fontSize: '13px', color: 'var(--danger)', margin: 0, textAlign: 'center' }}>⚠ {error}</p>}
 
-        {mode === 'login' && (
-          <Button full size="lg" onClick={handleLogin} disabled={loading}>
-            {loading ? '로그인 중...' : '로그인'}
-          </Button>
-        )}
-        {mode === 'signup' && step === 'input' && (
+        {step === 'input' && (
           <Button full size="lg" onClick={handleSendCode} disabled={loading}>
             {loading ? '발송 중...' : '인증번호 받기 →'}
           </Button>
         )}
-        {mode === 'signup' && step === 'verify' && (
-          <Button full size="lg" onClick={handleVerify} disabled={code.length !== 6}>
-            확인 →
-          </Button>
-        )}
-        {mode === 'signup' && step === 'password' && (
-          <Button full size="lg" onClick={handleSignup} disabled={loading || password.length < 6}>
-            {loading ? '가입 중...' : '🎉 가입 완료'}
+        {step === 'verify' && (
+          <Button full size="lg" onClick={handleVerify} disabled={loading || code.length !== 6}>
+            {loading ? '확인 중...' : mode === 'signup' ? '🎉 가입 완료' : '로그인'}
           </Button>
         )}
       </div>
