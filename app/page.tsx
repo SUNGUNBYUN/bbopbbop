@@ -5,6 +5,7 @@ import { Post, User } from '@/lib/types'
 import { Logo } from '@/components/Logo'
 import { IconButton, Toast } from '@/components/ui'
 import { unreadCount } from '@/lib/social'
+import { getBalance } from '@/lib/points'
 import { startOrGetChat } from '@/lib/chat'
 import { NotificationList } from '@/components/NotificationList'
 import { Onboarding } from '@/components/Onboarding'
@@ -36,7 +37,13 @@ export default function Home() {
   const [toast, setToast] = useState<{ msg: string; emoji?: string } | null>(null)
   const [showNotifications, setShowNotifications] = useState(false)
   const [unread, setUnread] = useState(0)
+  const [balance, setBalance] = useState(0)
   const { show: showOnboarding, dismiss: dismissOnboarding } = useOnboarding()
+
+  async function refreshBalance() {
+    if (!user) { setBalance(0); return }
+    setBalance(await getBalance(user.id))
+  }
 
   useEffect(() => {
     fetchPosts()
@@ -60,9 +67,12 @@ export default function Home() {
 
   // 안 읽은 알림 개수 (로그인 시 + 30초마다)
   useEffect(() => {
-    if (!user) { setUnread(0); return }
+    if (!user) { setUnread(0); setBalance(0); return }
     let alive = true
-    const check = async () => { const c = await unreadCount(user.id); if (alive) setUnread(c) }
+    const check = async () => {
+      const c = await unreadCount(user.id); if (alive) setUnread(c)
+      const b = await getBalance(user.id); if (alive) setBalance(b)
+    }
     check()
     const timer = setInterval(check, 30000)
     return () => { alive = false; clearInterval(timer) }
@@ -135,7 +145,10 @@ export default function Home() {
         <PostForm
           user={user}
           onClose={() => setShowForm(false)}
-          onSubmitted={() => { setShowForm(false); fetchPosts(); showToast('제보 완료! 고마워요', '🎉') }}
+          onSubmitted={(earned) => {
+            setShowForm(false); fetchPosts(); refreshBalance()
+            showToast(earned && earned > 0 ? `제보 완료! +${earned}P 적립 🎉` : '제보 완료! 고마워요', '🎉')
+          }}
         />
       </div>
     )
@@ -155,6 +168,14 @@ export default function Home() {
           <Logo />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+          {user && (
+            <button
+              onClick={() => setShowMyPage(true)}
+              className="pressable"
+              aria-label="내 포인트"
+              style={{ display: 'flex', alignItems: 'center', gap: '3px', background: 'var(--coral-soft)', border: 'none', borderRadius: 'var(--r-full)', padding: '6px 11px', cursor: 'pointer', color: 'var(--coral)', fontSize: '13px', fontWeight: 800 }}
+            >🪙 {balance.toLocaleString()}<span style={{ fontSize: '11px', fontWeight: 700 }}>P</span></button>
+          )}
           {user && (
             <IconButton onClick={() => setShowNotifications(true)} badge={unread} aria-label="알림">
               <svg width="21" height="21" viewBox="0 0 24 24" fill="none">

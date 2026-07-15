@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { awardPoints } from '@/lib/points'
 import { User, Place } from '@/lib/types'
 import { Header, BackButton, Button, Input, Field } from './ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from './MultiImageUploader'
@@ -9,7 +10,7 @@ import { PlaceSearchSheet } from './PlaceSearchSheet'
 type Props = {
   user: User
   onClose: () => void
-  onSubmitted: () => void
+  onSubmitted: (earnedPoints?: number) => void
 }
 
 type Errors = { image?: string; title?: string; location?: string }
@@ -51,15 +52,20 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
     setUploading(true)
     const urls = await uploadImages(supabase, images)
     const fullLocation = locationDetail ? `${location} (${locationDetail})` : location
-    const { error } = await supabase.from('posts').insert({
+    const { data, error } = await supabase.from('posts').insert({
       title, location: fullLocation, tags,
       image_url: urls[0] ?? null,
       images: urls,
       user_id: user.id, nickname: user.nickname,
       latitude: locationLat, longitude: locationLng, place_name: locationPlaceName,
-    })
+    }).select('id').single()
+    // 제보 포인트 적립(서버가 상한/중복 판단, 실제 지급분 반환)
+    let earned = 0
+    if (!error && data) {
+      earned = await awardPoints('report', 'post', data.id)
+    }
     setUploading(false)
-    if (!error) onSubmitted()
+    if (!error) onSubmitted(earned)
   }
 
   return (

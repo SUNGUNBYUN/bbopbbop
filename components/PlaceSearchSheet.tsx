@@ -7,6 +7,20 @@ declare global {
   interface Window { kakao: any }
 }
 
+// 두 좌표 간 거리 (미터)
+function dist(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function formatDist(m: number): string {
+  if (m < 1000) return `${Math.round(m)}m`
+  return `${(m / 1000).toFixed(1)}km`
+}
+
 /** 업체 검색 + 지도 미리보기 + 직접 등록 (제보/마켓 공용) */
 export function PlaceSearchSheet({ user, onSelect, onClose }: {
   user: User
@@ -19,6 +33,14 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
   const [kakaoReady, setKakaoReady] = useState(false)
   const [searching, setSearching] = useState(false)
   const [mapPreview, setMapPreview] = useState<Place | null>(null)
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null)
+
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setMyLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setMyLoc(null)
+    )
+  }, [])
 
   useEffect(() => {
     if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
@@ -43,20 +65,36 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
     if (!kakaoReady || !window.kakao?.maps?.services) return
     setSearching(true)
     const ps = new window.kakao.maps.services.Places()
+
+    const options: any = {}
+    if (myLoc) {
+      options.location = new window.kakao.maps.LatLng(myLoc.lat, myLoc.lng)
+      options.radius = 20000 // 20km 이내 우선
+      options.sort = window.kakao.maps.services.SortBy.DISTANCE
+    }
+
     ps.keywordSearch(query, (data: any[], status: string) => {
       setSearching(false)
       if (status === window.kakao.maps.services.Status.OK) {
-        setResults(data.map((p: any) => ({
+        let places: Place[] = data.map((p: any) => ({
           place_name: p.place_name,
           address_name: p.address_name,
           road_address_name: p.road_address_name,
           x: p.x,
           y: p.y,
-        })))
+        }))
+        // 내 위치 있으면 가까운 순 정렬
+        if (myLoc) {
+          places = places.sort((a, b) =>
+            dist(myLoc.lat, myLoc.lng, parseFloat(a.y), parseFloat(a.x)) -
+            dist(myLoc.lat, myLoc.lng, parseFloat(b.y), parseFloat(b.x))
+          )
+        }
+        setResults(places)
       } else {
         setResults([])
       }
-    })
+    }, options)
   }
 
   if (showRegister) {
@@ -97,7 +135,14 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
           )}
           {results.map((place, i) => (
             <div key={i} style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)' }}>
-              <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }}>{place.place_name}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 4px' }}>
+                <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{place.place_name}</p>
+                {myLoc && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--coral)', background: 'var(--coral-soft)', padding: '2px 7px', borderRadius: 'var(--r-full)', flexShrink: 0 }}>
+                    {formatDist(dist(myLoc.lat, myLoc.lng, parseFloat(place.y), parseFloat(place.x)))}
+                  </span>
+                )}
+              </div>
               <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: '0 0 10px' }}>{place.road_address_name || place.address_name}</p>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => setMapPreview(place)} style={{ flex: 1, padding: '9px', borderRadius: 'var(--r-sm)', border: '1.5px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>🗺️ 지도로 보기</button>

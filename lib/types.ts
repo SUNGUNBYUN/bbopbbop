@@ -62,6 +62,7 @@ export type MarketItem = {
   view_count: number
   like_count: number
   created_at: string
+  bumped_at: string | null
 }
 
 export type FeedPost = {

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { User, MarketItem, Place } from '@/lib/types'
 import { timeAgo, formatPrice, tradeTypeText, marketStatus } from '@/lib/utils'
 import { notify } from '@/lib/social'
+import { bumpMarketItem } from '@/lib/points'
 import { Header, BackButton, IconButton, Avatar, Button, Input, Field, Badge, Stat, EmptyState } from '@/components/ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from '@/components/MultiImageUploader'
 import { ImageGallery } from '@/components/ImageGallery'
@@ -12,6 +13,9 @@ import { PlaceSearchSheet } from '@/components/PlaceSearchSheet'
 
 type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
 type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat }
+
+/** 끌어올리기 1회 비용(포인트) */
+const BUMP_COST = 20
 
 export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [items, setItems] = useState<MarketItem[]>([])
@@ -24,8 +28,14 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
 
   async function fetchItems() {
     setLoading(true)
-    const { data } = await supabase.from('market_items').select('*').order('created_at', { ascending: false })
-    if (data) setItems(data)
+    const { data } = await supabase.from('market_items').select('*')
+    if (data) {
+      // 끌어올린 시각(없으면 등록 시각) 기준 최신순
+      const sorted = [...data].sort((a, b) =>
+        new Date(b.bumped_at ?? b.created_at).getTime() - new Date(a.bumped_at ?? a.created_at).getTime()
+      )
+      setItems(sorted)
+    }
     setLoading(false)
   }
 
@@ -110,6 +120,7 @@ function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item:
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [chatCount, setChatCount] = useState(0)
+  const [bumping, setBumping] = useState(false)
   const isMine = user?.id === item.user_id
   const badge = marketStatus(status)
   const gallery = (item.images && item.images.length > 0) ? item.images : (item.image_url ? [item.image_url] : [])
@@ -162,6 +173,21 @@ function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item:
     if (!confirm('이 상품을 삭제할까요? 되돌릴 수 없어요.')) return
     await supabase.from('market_items').delete().eq('id', item.id)
     onBack()
+  }
+
+  async function handleBump() {
+    if (!user) { onRequireAuth(); return }
+    if (!confirm(`${BUMP_COST}포인트로 이 상품을 목록 맨 위로 끌어올릴까요?`)) return
+    setBumping(true)
+    try {
+      await bumpMarketItem(item.id, BUMP_COST)
+      alert('맨 위로 끌어올렸어요! 🔝')
+      onBack()
+    } catch (e: any) {
+      alert(e.message ?? '끌어올리기에 실패했어요')
+    } finally {
+      setBumping(false)
+    }
   }
 
   return (
@@ -225,14 +251,22 @@ function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item:
           )}
 
           {isMine && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {['selling', 'reserved', 'sold'].map(s => {
-                const b = marketStatus(s)
-                return (
-                  <button key={s} onClick={() => changeStatus(s)} style={{ flex: 1, padding: '11px', borderRadius: 'var(--r-md)', border: status === s ? `1.5px solid ${b.color}` : '1.5px solid var(--line)', background: status === s ? b.bg : 'var(--surface)', color: status === s ? b.color : 'var(--ink-3)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>{b.text}</button>
-                )
-              })}
-            </div>
+            <>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {['selling', 'reserved', 'sold'].map(s => {
+                  const b = marketStatus(s)
+                  return (
+                    <button key={s} onClick={() => changeStatus(s)} style={{ flex: 1, padding: '11px', borderRadius: 'var(--r-md)', border: status === s ? `1.5px solid ${b.color}` : '1.5px solid var(--line)', background: status === s ? b.bg : 'var(--surface)', color: status === s ? b.color : 'var(--ink-3)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>{b.text}</button>
+                  )
+                })}
+              </div>
+              <button
+                onClick={handleBump}
+                disabled={bumping}
+                className="pressable"
+                style={{ width: '100%', padding: '13px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)', color: 'var(--coral)', fontSize: '14px', fontWeight: 700, cursor: bumping ? 'default' : 'pointer', opacity: bumping ? 0.6 : 1 }}
+              >{bumping ? '끌어올리는 중…' : `🔝 끌어올리기 (${BUMP_COST}P)`}</button>
+            </>
           )}
 
           {/* 찜 + 채팅 버튼 (내 상품이 아닐 때만 채팅) */}
