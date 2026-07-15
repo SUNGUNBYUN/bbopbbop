@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { awardPoints } from '@/lib/points'
+import { getOrCreatePlace, awardProductReport, findNearbyPlaces, placeProducts, looksLikeClawMachine, NearbyPlace, PlaceProduct } from '@/lib/points'
 import { User, Place } from '@/lib/types'
 import { Header, BackButton, Button, Input, Field } from './ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from './MultiImageUploader'
@@ -10,7 +10,7 @@ import { PlaceSearchSheet } from './PlaceSearchSheet'
 type Props = {
   user: User
   onClose: () => void
-  onSubmitted: (earnedPoints?: number) => void
+  onSubmitted: (earnedPoints?: number, dupMessage?: string) => void
 }
 
 type Errors = { image?: string; title?: string; location?: string }
@@ -27,15 +27,39 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
   const [uploading, setUploading] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
   const [showMapSearch, setShowMapSearch] = useState(false)
+  const [dupCandidates, setDupCandidates] = useState<NearbyPlace[]>([])
+  const [existingPlaceId, setExistingPlaceId] = useState<string | null>(null)
+  const [categoryWarn, setCategoryWarn] = useState(false)
+  const [existingProducts, setExistingProducts] = useState<PlaceProduct[]>([])
+  const [isDifferent, setIsDifferent] = useState(false)
 
-  function handlePlaceSelect(place: Place) {
+  async function handlePlaceSelect(place: Place) {
+    const lat = parseFloat(place.y)
+    const lng = parseFloat(place.x)
     setLocation(place.place_name)
     setLocationDetail(place.road_address_name || place.address_name)
-    setLocationLat(parseFloat(place.y))
-    setLocationLng(parseFloat(place.x))
+    setLocationLat(lat)
+    setLocationLng(lng)
     setLocationPlaceName(place.place_name)
     setShowMapSearch(false)
     setErrors(p => ({ ...p, location: undefined }))
+    setExistingPlaceId(null)
+    setExistingProducts([])
+    setCategoryWarn(!looksLikeClawMachine(place.category_name))
+    // 중복 후보 조회
+    const near = await findNearbyPlaces(lat, lng)
+    setDupCandidates(near)
+  }
+
+  async function chooseExisting(id: string) {
+    setExistingPlaceId(id)   // "이 가게 맞아요" → 이 가게에 상품 추가
+    setIsDifferent(false)
+    const prods = await placeProducts(id)
+    setExistingProducts(prods)
+  }
+  function chooseNew() {
+    setExistingPlaceId(null)
+    setDupCandidates([])     // "아니요, 새 가게" → 후보 숨김
   }
 
   function validate() {
@@ -47,25 +71,49 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
     return Object.keys(e).length === 0
   }
 
+  // 올리기: 유저가 "다른 상품" 체크했으면 중복검사 건너뜀
   async function handleSubmit() {
     if (!validate()) return
+    doSubmit(isDifferent)
+  }
+
+  async function doSubmit(force: boolean) {
     setUploading(true)
     const urls = await uploadImages(supabase, images)
     const fullLocation = locationDetail ? `${location} (${locationDetail})` : location
-    const { data, error } = await supabase.from('posts').insert({
+
+    let placeId: string | null = null
+    if (locationLat != null && locationLng != null) {
+      const pr = await getOrCreatePlace({
+        placeName: locationPlaceName || location,
+        address: fullLocation,
+        lat: locationLat, lng: locationLng,
+        existingPlaceId: existingPlaceId,
+      })
+      if (pr) placeId = pr.place_id
+    }
+
+    const { data: post, error } = await supabase.from('posts').insert({
       title, location: fullLocation, tags,
       image_url: urls[0] ?? null,
       images: urls,
       user_id: user.id, nickname: user.nickname,
       latitude: locationLat, longitude: locationLng, place_name: locationPlaceName,
+      place_id: placeId,
     }).select('id').single()
-    // 제보 포인트 적립(서버가 상한/중복 판단, 실제 지급분 반환)
-    let earned = 0
-    if (!error && data) {
-      earned = await awardPoints('report', 'post', data.id)
+
+    let wasDup = false
+    if (!error && post && placeId) {
+      const rr = await awardProductReport(post.id, placeId, title, force)
+      if (rr) wasDup = rr.is_dup
     }
+
     setUploading(false)
-    if (!error) onSubmitted(earned)
+    if (!error) {
+      // 즉시 지급은 0 — 재인증 시 확정. 중복이면 안내.
+      const dupMsg = wasDup ? '이미 제보된 상품이라 포인트는 없어요. 정보는 갱신했어요!' : undefined
+      onSubmitted(0, dupMsg)
+    }
   }
 
   return (
@@ -119,6 +167,59 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
             >🔍 업체명으로 검색하기</button>
           )}
         </Field>
+
+        {/* 업종 경고: 오락/인형뽑기 카테고리가 아닐 때 */}
+        {location && categoryWarn && (
+          <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--danger)', background: 'rgba(255,90,95,0.08)' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--danger)', margin: '0 0 2px' }}>⚠️ 인형뽑기 가게가 맞나요?</p>
+            <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>오락/게임 업종이 아닌 것 같아요. 인형뽑기가 없는 곳을 등록하면 다른 이용자 확인을 못 받아 포인트가 지급되지 않아요.</p>
+          </div>
+        )}
+
+        {/* 중복 후보: "혹시 이 가게 아닌가요?" */}
+        {dupCandidates.length > 0 && !existingPlaceId && (
+          <div style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)' }}>
+            <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }}>🤔 이미 등록된 가게예요</p>
+            <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 10px' }}>같은 가게면 선택하세요. 이 가게에 상품 제보를 추가해요(+20P). 다른 가게면 새로 등록하세요.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {dupCandidates.map(c => (
+                <button key={c.id} onClick={() => chooseExisting(c.id)} className="pressable"
+                  style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--r-sm)', border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer' }}>
+                  <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--ink)' }}>📍 {c.place_name}</span>
+                  <span style={{ fontSize: '11.5px', color: 'var(--ink-4)', marginLeft: 6 }}>{Math.round(c.distance_m)}m · 상품 {c.product_count}개</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={chooseNew} style={{ marginTop: 8, width: '100%', padding: '10px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--surface-2)', color: 'var(--ink-3)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+              아니요, 다른(새) 가게예요
+            </button>
+          </div>
+        )}
+        {existingPlaceId && (
+          <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--mint-soft, var(--coral-soft))', fontSize: '13px', color: 'var(--coral)', fontWeight: 600 }}>
+            ✓ 이 가게에 상품을 추가해요. 다시 고르려면 위치를 다시 선택하세요.
+          </div>
+        )}
+        {existingPlaceId && existingProducts.length > 0 && (
+          <div style={{ padding: '14px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-2)', margin: '0 0 4px' }}>이 가게에 이미 제보된 상품 ({existingProducts.length})</p>
+            <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: '0 0 10px' }}>사진을 보고 내가 올리려는 상품과 같은지 확인하세요. 같으면 포인트가 없어요.</p>
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }} className="no-scrollbar">
+              {existingProducts.map(p => (
+                <div key={p.id} style={{ flexShrink: 0, width: '84px' }}>
+                  <div style={{ width: '84px', height: '84px', borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--line)' }}>
+                    {p.image_url ? <img src={p.image_url} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '28px' }}>🧸</span>}
+                  </div>
+                  <p style={{ fontSize: '11.5px', color: 'var(--ink-3)', margin: '5px 0 0', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</p>
+                </div>
+              ))}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={isDifferent} onChange={(e) => setIsDifferent(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: 'var(--coral)' }} />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink-2)' }}>위 상품들과 <b style={{ color: 'var(--coral)' }}>다른 새 상품</b>이에요 (포인트 받기)</span>
+            </label>
+          </div>
+        )}
 
         <Field label="태그" optional>
           <Input placeholder="#피카츄 #포켓몬" value={tags} onChange={(e) => setTags(e.target.value)} />

@@ -65,8 +65,103 @@ export async function getLedger(userId: string, limit = 30): Promise<LedgerRow[]
 /** 사유 → 한글 라벨 (내역 표시용) */
 export const REASON_LABELS: Record<string, string> = {
   place_create: '가게 첫 등록',
-  report: '제보 작성',
+  place_confirmed: '가게 등록 확정',
+  product_report: '상품 제보',
+  product_confirmed: '상품 확정 보상',
   reverify: '정보 재확인',
   feed: '자랑글 작성',
   spend_bump: '마켓 끌어올리기',
+}
+
+/* ============================================
+   Phase 2: 중복 감지 + 조건부 지급 + 재인증
+   ============================================ */
+
+export type NearbyPlace = {
+  id: string
+  place_name: string
+  address: string | null
+  latitude: number
+  longitude: number
+  product_count: number
+  distance_m: number
+}
+
+/** 등록 전 근처 중복 후보 조회 (반경 ~50m + kakao_place_id) */
+export async function findNearbyPlaces(lat: number, lng: number, kakaoId?: string): Promise<NearbyPlace[]> {
+  const { data, error } = await supabase.rpc('find_nearby_places', {
+    p_lat: lat, p_lng: lng, p_kakao_id: kakaoId ?? null,
+  })
+  if (error) { console.error('findNearbyPlaces', error); return [] }
+  return (data as NearbyPlace[]) ?? []
+}
+
+export type PlaceResult = { place_id: string; place_reward: number; is_new_place: boolean }
+
+/**
+ * 가게 확보(get-or-create). existingPlaceId를 주면 그 가게 사용(상품 추가),
+ * 없으면 신규 가게 생성 + 즉시 10P(가게 확정 90P는 재인증 시).
+ */
+export async function getOrCreatePlace(args: {
+  placeName: string; address?: string | null; lat: number; lng: number
+  kakaoId?: string | null; existingPlaceId?: string | null
+}): Promise<PlaceResult | null> {
+  const { data, error } = await supabase.rpc('get_or_create_place', {
+    p_place_name: args.placeName,
+    p_address: args.address ?? null,
+    p_lat: args.lat, p_lng: args.lng,
+    p_kakao_id: args.kakaoId ?? null,
+    p_existing_place_id: args.existingPlaceId ?? null,
+  })
+  if (error) { console.error('getOrCreatePlace', error); return null }
+  return data as PlaceResult
+}
+
+export type ProductResult = { post_reward: number; is_dup: boolean }
+
+/**
+ * 상품 제보 보상. posts insert 후 호출.
+ * 같은 가게+같은 상품이 7일 이내면 중복(0P), 아니면 20P.
+ */
+export async function awardProductReport(postId: string, placeId: string, title: string, force = false): Promise<ProductResult | null> {
+  const { data, error } = await supabase.rpc('award_product_report', {
+    p_post_id: postId, p_place_id: placeId, p_title: title, p_force: force,
+  })
+  if (error) { console.error('awardProductReport', error); return null }
+  return data as ProductResult
+}
+
+export type SimilarProduct = { id: string; title: string; image_url: string | null; created_at: string }
+
+/** 입력한 상품명과 비슷한 기존 상품(사진 포함) — 유저 판단용 팝업에 사용 */
+export async function similarProducts(placeId: string, title: string): Promise<SimilarProduct[]> {
+  const { data, error } = await supabase.rpc('similar_products', { p_place_id: placeId, p_title: title })
+  if (error) { console.error('similarProducts', error); return [] }
+  return (data as SimilarProduct[]) ?? []
+}
+
+export type VerifyResult = { my_reward: number; owner_confirmed: number; place_confirmed?: number; verify_count?: number; already?: boolean }
+
+/** "진짜 있어요" 재인증. 확인해준 사람 +10P, 미확정 제보면 작성자 확정 90P. */
+export async function verifyPost(postId: string): Promise<VerifyResult | null> {
+  const { data, error } = await supabase.rpc('verify_post', { p_post_id: postId })
+  if (error) throw new Error(error.message || '확인에 실패했어요')
+  return data as VerifyResult
+}
+
+
+export type PlaceProduct = { id: string; title: string; image_url: string | null; created_at: string }
+
+/** 가게의 기존 상품 목록(등록 전 유저에게 보여줌) */
+export async function placeProducts(placeId: string): Promise<PlaceProduct[]> {
+  const { data, error } = await supabase.rpc('place_products', { p_place_id: placeId })
+  if (error) { console.error('placeProducts', error); return [] }
+  return (data as PlaceProduct[]) ?? []
+}
+
+/** 카카오 카테고리로 인형뽑기/오락 업종인지 추정 (경고용, 완전판별 아님) */
+export function looksLikeClawMachine(categoryName?: string): boolean {
+  if (!categoryName) return true // 정보 없으면 경고 안 띄움(오탐 방지)
+  const kw = ['오락', '게임', '인형', '뽑기', '락커', '문화', '놀이', 'PC방', '노래']
+  return kw.some(k => categoryName.includes(k))
 }

@@ -22,6 +22,11 @@ export type Post = {
   latitude: number | null
   longitude: number | null
   place_name: string | null
+  verify_count?: number
+  last_verified_at?: string | null
+  reward_confirmed?: boolean
+  hidden?: boolean
+  place_id?: string | null
 }
 
 export type Comment = {
@@ -39,6 +44,8 @@ export type Place = {
   road_address_name: string
   x: string
   y: string
+  category_name?: string
+  category_group_code?: string
 }
 
 export type SortKey = 'recent' | 'popular' | 'comments'

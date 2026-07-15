@@ -145,9 +145,11 @@ export default function Home() {
         <PostForm
           user={user}
           onClose={() => setShowForm(false)}
-          onSubmitted={(earned) => {
+          onSubmitted={(earned, dupMsg) => {
             setShowForm(false); fetchPosts(); refreshBalance()
-            showToast(earned && earned > 0 ? `제보 완료! +${earned}P 적립 🎉` : '제보 완료! 고마워요', '🎉')
+            if (dupMsg) showToast(dupMsg, '🔁')
+            else if (earned && earned > 0) showToast(`제보 완료! +${earned}P 적립 🎉`, '🎉')
+            else showToast('제보 완료! 다른 분이 확인하면 포인트를 드려요', '✅')
           }}
         />
       </div>

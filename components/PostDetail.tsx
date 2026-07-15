@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Post, Comment, User } from '@/lib/types'
 import { timeAgo } from '@/lib/utils'
 import { notify } from '@/lib/social'
+import { verifyPost } from '@/lib/points'
 import { Header, BackButton, IconButton, Avatar, Button, Stat, Input } from './ui'
 import { ReportSheet } from './ReportSheet'
 import { ImageGallery } from './ImageGallery'
@@ -28,6 +29,8 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
   const [commentLoading, setCommentLoading] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
+  const [verifyCount, setVerifyCount] = useState(post.verify_count ?? 0)
+  const [verifying, setVerifying] = useState(false)
 
   const isMine = user?.id === post.user_id
 
@@ -111,6 +114,22 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
     if (!confirm('이 제보를 삭제할까요? 되돌릴 수 없어요.')) return
     await supabase.from('posts').delete().eq('id', post.id)
     onDeleted()
+  }
+
+  async function handleVerify() {
+    if (!user) { onRequireAuth(); return }
+    setVerifying(true)
+    try {
+      const r = await verifyPost(post.id)
+      if (typeof r?.verify_count === 'number') setVerifyCount(r.verify_count)
+      const earned = r?.my_reward ?? 0
+      if (earned > 0) alert(`확인해줘서 고마워요! +${earned}P 🎉`)
+      else alert('이미 확인한 제보예요. 한 제보는 한 번만 포인트를 받을 수 있어요.')
+    } catch (e: any) {
+      alert(e.message ?? '확인에 실패했어요')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   return (
@@ -199,6 +218,19 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
           >
             {myLiked ? '❤️ 좋아요 취소' : '🤍 좋아요'} {likeCount > 0 && `${likeCount}`}
           </Button>
+
+          {/* 재인증: 지금도 진짜 있는지 확인 (본인 제보 제외) */}
+          {!isMine && (
+            <button
+              onClick={handleVerify}
+              disabled={verifying}
+              className="pressable"
+              style={{ width: '100%', padding: '13px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--mint, var(--coral))', background: 'var(--mint-soft, var(--coral-soft))', color: 'var(--coral)', fontSize: '14px', fontWeight: 700, cursor: verifying ? 'default' : 'pointer', opacity: verifying ? 0.6 : 1 }}
+            >
+              {verifying ? '확인 중…' : `✅ 지금도 여기 있어요 (+10P)`}
+              {verifyCount > 0 && <span style={{ marginLeft: 6, fontSize: 12, color: 'var(--ink-4)' }}>· {verifyCount}명 확인</span>}
+            </button>
+          )}
 
           {/* 댓글 */}
           <div>

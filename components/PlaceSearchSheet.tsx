@@ -82,6 +82,8 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
           road_address_name: p.road_address_name,
           x: p.x,
           y: p.y,
+          category_name: p.category_name,
+          category_group_code: p.category_group_code,
         }))
         // 내 위치 있으면 가까운 순 정렬
         if (myLoc) {
