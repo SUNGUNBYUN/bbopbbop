@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Post, Comment, User } from '@/lib/types'
-import { timeAgo } from '@/lib/utils'
+import { timeAgo, freshness } from '@/lib/utils'
 import { notify } from '@/lib/social'
 import { verifyPost } from '@/lib/points'
 import { Header, BackButton, IconButton, Avatar, Button, Stat, Input } from './ui'
@@ -218,6 +218,20 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
           >
             {myLiked ? '❤️ 좋아요 취소' : '🤍 좋아요'} {likeCount > 0 && `${likeCount}`}
           </Button>
+
+          {/* 신선도 안내 */}
+          {(() => {
+            const f = freshness(post.last_verified_at, post.created_at)
+            if (!f.label) return null
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 14px', borderRadius: 'var(--r-md)', background: f.bg }}>
+                <span style={{ fontSize: '15px' }}>{f.level === 'fresh' ? '✓' : '🕗'}</span>
+                <p style={{ fontSize: '13px', fontWeight: 600, color: f.color, margin: 0 }}>
+                  {f.level === 'stale' ? '오래된 정보예요. 지금도 있는지 확인해주세요!' : f.label}
+                </p>
+              </div>
+            )
+          })()}
 
           {/* 재인증: 지금도 진짜 있는지 확인 (본인 제보 제외) */}
           {!isMine && (

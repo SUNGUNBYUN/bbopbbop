@@ -1,11 +1,13 @@
 'use client'
 import { Post } from '@/lib/types'
-import { timeAgo, compactNumber } from '@/lib/utils'
+import { timeAgo, compactNumber, freshness } from '@/lib/utils'
 import { Card, Stat } from './ui'
 
 export function PostCard({ post, onClick }: { post: Post; onClick: () => void }) {
+  const fresh = freshness(post.last_verified_at, post.created_at)
+  const isStale = fresh.level === 'stale'
   return (
-    <Card onClick={onClick} style={{ display: 'flex', gap: '13px', alignItems: 'stretch', padding: '12px' }}>
+    <Card onClick={onClick} style={{ display: 'flex', gap: '13px', alignItems: 'stretch', padding: '12px', opacity: isStale ? 0.62 : 1 }}>
       {/* 썸네일 */}
       <div style={{
         width: '84px', height: '84px', borderRadius: 'var(--r-md)', flexShrink: 0,
@@ -15,6 +17,11 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
         {post.image_url
           ? <img src={post.image_url} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <span style={{ fontSize: '30px', opacity: 0.5 }}>🧸</span>}
+        {isStale && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', background: 'rgba(255,255,255,0.9)', padding: '2px 6px', borderRadius: 'var(--r-full)' }}>오래됨</span>
+          </div>
+        )}
       </div>
 
       {/* 본문 */}
@@ -43,6 +50,12 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
             }}>{post.tags}</p>
           )}
         </div>
+
+        {fresh.label && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', alignSelf: 'flex-start', fontSize: '10.5px', fontWeight: 700, color: fresh.color, background: fresh.bg, padding: '2px 8px', borderRadius: 'var(--r-full)', marginTop: '5px' }}>
+            {fresh.level === 'fresh' ? '✓' : '🕗'} {fresh.label}
+          </span>
+        )}
 
         {/* 메타 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>

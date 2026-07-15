@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { timeAgo, formatPrice, marketStatus } from '@/lib/utils'
+import { getBalance, getLedger, LedgerRow, REASON_LABELS } from '@/lib/points'
 import { Header, BackButton, Button, EmptyState, Spinner, Stat } from '@/components/ui'
 
 type Post = { id: string; title: string; location: string | null; image_url: string | null; created_at: string; view_count: number; like_count: number; comment_count: number }
@@ -12,16 +13,18 @@ type FeedPost = { id: string; content: string | null; image_url: string | null; 
 type Props = { user: User; onClose: () => void; onSelectPost: (post: any) => void }
 
 export default function MyPage({ user, onClose, onSelectPost }: Props) {
-  const [section, setSection] = useState<'posts' | 'market' | 'feed' | 'liked'>('posts')
+  const [section, setSection] = useState<'posts' | 'market' | 'feed' | 'liked' | 'points'>('posts')
   const [myPosts, setMyPosts] = useState<Post[]>([])
   const [myMarket, setMyMarket] = useState<MarketItem[]>([])
   const [myFeed, setMyFeed] = useState<FeedPost[]>([])
   const [likedPosts, setLikedPosts] = useState<Post[]>([])
+  const [ledger, setLedger] = useState<LedgerRow[]>([])
+  const [balance, setBalance] = useState(0)
   const [loading, setLoading] = useState(true)
   const [counts, setCounts] = useState({ posts: 0, market: 0, feed: 0 })
 
   useEffect(() => { fetchData() }, [section])
-  useEffect(() => { fetchCounts() }, [])
+  useEffect(() => { fetchCounts(); getBalance(user.id).then(setBalance) }, [])
 
   async function fetchCounts() {
     const [p, m, f] = await Promise.all([
@@ -50,6 +53,9 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
         const { data: posts } = await supabase.from('posts').select('*').in('id', ids).order('created_at', { ascending: false })
         if (posts) setLikedPosts(posts)
       } else setLikedPosts([])
+    } else if (section === 'points') {
+      setLedger(await getLedger(user.id, 50))
+      setBalance(await getBalance(user.id))
     }
     setLoading(false)
   }
@@ -64,6 +70,7 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
     { key: 'market' as const, label: '내 마켓', icon: '🛍️' },
     { key: 'feed' as const, label: '내 피드', icon: '📸' },
     { key: 'liked' as const, label: '좋아요', icon: '❤️' },
+    { key: 'points' as const, label: '포인트', icon: '🪙' },
   ]
 
   return (
@@ -77,6 +84,10 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: '19px', fontWeight: 800, margin: '0 0 3px' }}>{user.nickname}</p>
             <p style={{ fontSize: '12.5px', opacity: 0.85, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: '22px', fontWeight: 800, margin: 0, lineHeight: 1 }}>🪙 {balance.toLocaleString()}</p>
+            <p style={{ fontSize: '11px', opacity: 0.85, margin: '3px 0 0' }}>내 포인트</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
@@ -156,6 +167,24 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
                       <div style={{ position: 'absolute', bottom: '5px', right: '5px' }}>
                         <span style={{ fontSize: '10px', color: '#fff', background: 'rgba(26,21,35,0.55)', padding: '2px 6px', borderRadius: 'var(--r-full)' }}>❤️ {feed.like_count}</span>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {section === 'points' && (
+              ledger.length === 0 ? <EmptyState emoji="🪙" title="아직 포인트 내역이 없어요" desc="가게·상품을 제보하고 포인트를 모아보세요!" /> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {ledger.map(row => (
+                    <div key={row.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 4px', borderBottom: '1px solid var(--line)' }}>
+                      <div>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 2px' }}>{REASON_LABELS[row.reason] ?? row.reason}</p>
+                        <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(row.created_at)}</p>
+                      </div>
+                      <p style={{ fontSize: '15px', fontWeight: 800, margin: 0, color: row.amount >= 0 ? 'var(--coral)' : 'var(--ink-4)' }}>
+                        {row.amount >= 0 ? '+' : ''}{row.amount.toLocaleString()}P
+                      </p>
                     </div>
                   ))}
                 </div>

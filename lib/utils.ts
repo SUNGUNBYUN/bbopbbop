@@ -47,3 +47,22 @@ export function marketStatus(status: string) {
   if (status === 'sold') return { text: '거래완료', color: 'var(--ink-3)', bg: 'var(--surface-3)' }
   return { text: '판매중', color: 'var(--coral)', bg: 'var(--coral-soft)' }
 }
+
+
+/** 정보 신선도 상태 (재인증 기준) */
+export type Freshness = { level: 'fresh' | 'aging' | 'stale'; label: string; color: string; bg: string; days: number }
+
+/**
+ * last_verified_at(없으면 created_at) 기준으로 신선도 계산.
+ *  - 7일 이내: FRESH (초록 "최근 확인")
+ *  - 8~30일: AGING (회색 "○일 전 확인")
+ *  - 30일+: STALE (흐림 "오래된 정보")
+ */
+export function freshness(lastVerifiedAt?: string | null, createdAt?: string): Freshness {
+  const base = lastVerifiedAt || createdAt
+  if (!base) return { level: 'fresh', label: '', color: 'var(--ink-4)', bg: 'transparent', days: 0 }
+  const days = Math.floor((Date.now() - new Date(base).getTime()) / 86400000)
+  if (days <= 7) return { level: 'fresh', label: '최근 확인', color: '#12B76A', bg: 'rgba(18,183,106,0.12)', days }
+  if (days <= 30) return { level: 'aging', label: `${days}일 전 확인`, color: 'var(--ink-3)', bg: 'var(--surface-2)', days }
+  return { level: 'stale', label: '오래된 정보', color: 'var(--ink-4)', bg: 'var(--surface-2)', days }
+}
