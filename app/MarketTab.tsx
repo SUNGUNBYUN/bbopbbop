@@ -77,8 +77,8 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
             {filtered.map(item => {
               const badge = marketStatus(item.status)
               return (
-                <div key={item.id} onClick={() => openDetail(item, setSelected)} className="pressable" style={{ cursor: 'pointer' }}>
-                  <div style={{ width: '100%', aspectRatio: '1', borderRadius: 'var(--r-md)', overflow: 'hidden', background: 'var(--surface-2)', position: 'relative' }}>
+                <div key={item.id} onClick={() => openDetail(item, setSelected)} className="pressable" style={{ cursor: 'pointer', background: 'var(--surface)', borderRadius: 'var(--r-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ width: '100%', aspectRatio: '1', overflow: 'hidden', background: 'var(--surface-2)', position: 'relative' }}>
                     {item.image_url
                       ? <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', opacity: 0.5 }}>🧸</div>}
@@ -88,11 +88,13 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
                       </div>
                     )}
                   </div>
-                  <p style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--ink)', margin: '9px 0 3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</p>
-                  <p style={{ fontSize: '15px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: '0 0 5px' }}>{formatPrice(item.price, item.is_free)}</p>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <Stat icon="❤️" value={item.like_count} />
-                    <Stat icon="👁" value={item.view_count} />
+                  <div style={{ padding: '9px 10px 11px' }}>
+                    <p style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</p>
+                    <p style={{ fontSize: '15px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: '0 0 6px' }}>{formatPrice(item.price, item.is_free)}</p>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Stat icon="❤️" value={item.like_count} />
+                      <Stat icon="👁" value={item.view_count} />
+                    </div>
                   </div>
                 </div>
               )

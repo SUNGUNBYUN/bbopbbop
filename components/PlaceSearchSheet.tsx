@@ -190,7 +190,7 @@ function MapPreview({ place, onBack, onConfirm }: { place: Place; onBack: () => 
   }, [place])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface)', zIndex: 210, maxWidth: 'var(--app-max)', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, height: '100dvh', background: 'var(--surface)', zIndex: 210, maxWidth: 'var(--app-max)', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
       <header style={{ height: 'var(--header-h)', padding: '0 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         <button onClick={onBack} style={{ width: '40px', height: '40px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--ink-2)' }}>←</button>
         <div style={{ flex: 1 }}>
@@ -199,9 +199,10 @@ function MapPreview({ place, onBack, onConfirm }: { place: Place; onBack: () => 
         </div>
       </header>
 
-      <div ref={mapRef} style={{ flex: 1, width: '100%' }} />
+      <div ref={mapRef} style={{ flex: 1, width: '100%', minHeight: 0 }} />
 
-      <div style={{ padding: '16px', flexShrink: 0, borderTop: '1px solid var(--line)' }}>
+      {/* 하단 버튼 — iOS 홈바(safe-area) 고려 */}
+      <div style={{ padding: '16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', flexShrink: 0, borderTop: '1px solid var(--line)', background: 'var(--surface)' }}>
         <button onClick={onConfirm} className="pressable" style={{ width: '100%', padding: '15px', borderRadius: 'var(--r-md)', background: 'var(--coral)', color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)' }}>
           ✓ 이 업체로 선택하기
         </button>

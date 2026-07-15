@@ -1,11 +1,13 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { User, FeedPost } from '@/lib/types'
+import { User, FeedPost, Place } from '@/lib/types'
 import { timeAgo } from '@/lib/utils'
 import { notify } from '@/lib/social'
-import { Header, BackButton, IconButton, Avatar, Button, Input, EmptyState } from '@/components/ui'
+import { Header, BackButton, IconButton, Avatar, Button, Input, Field, EmptyState } from '@/components/ui'
 import { ReportSheet } from '@/components/ReportSheet'
+import { uploadImages, ImageSlot } from '@/components/MultiImageUploader'
+import { PlaceSearchSheet } from '@/components/PlaceSearchSheet'
 
 type FeedComment = {
   id: string
@@ -99,8 +101,8 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
                 </div>
               </div>
               {feed.image_url && (
-                <div onClick={() => setSelected(feed)} style={{ cursor: 'pointer' }}>
-                  <img src={feed.image_url} alt="자랑" style={{ width: '100%', maxHeight: '440px', objectFit: 'cover', display: 'block' }} />
+                <div onClick={() => setSelected(feed)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '1', background: 'var(--surface-2)', overflow: 'hidden' }}>
+                  <img src={feed.image_url} alt="자랑" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 </div>
               )}
               <div style={{ padding: '12px 14px' }}>
@@ -196,7 +198,11 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, on
       />
 
       <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
-        {feed.image_url && <img src={feed.image_url} alt="자랑" style={{ width: '100%', maxHeight: '460px', objectFit: 'cover' }} />}
+        {feed.image_url && (
+          <div style={{ width: '100%', maxHeight: '70vh', background: 'var(--surface-2)', display: 'flex', justifyContent: 'center' }}>
+            <img src={feed.image_url} alt="자랑" style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} />
+          </div>
+        )}
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Avatar name={feed.nickname} />
@@ -258,26 +264,49 @@ function FeedForm({ user, onClose, onSubmitted }: { user: User; onClose: () => v
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 장소 (선택)
+  const [placeName, setPlaceName] = useState('')
+  const [placeAddr, setPlaceAddr] = useState('')
+  const [placeLat, setPlaceLat] = useState<number | null>(null)
+  const [placeLng, setPlaceLng] = useState<number | null>(null)
+  const [showPlaceSearch, setShowPlaceSearch] = useState(false)
+
+  function handlePlaceSelect(place: Place) {
+    setPlaceName(place.place_name)
+    setPlaceAddr(place.road_address_name || place.address_name)
+    setPlaceLat(parseFloat(place.y))
+    setPlaceLng(parseFloat(place.x))
+    setShowPlaceSearch(false)
+  }
 
   async function handleSubmit() {
     if (!content.trim() && !imageFile) return
     setUploading(true)
-    let image_url = null
+    let image_url: string | null = null
     if (imageFile) {
-      const fileName = `feed_${Date.now()}_${imageFile.name}`
-      const { data, error } = await supabase.storage.from('images').upload(fileName, imageFile)
-      if (!error && data) {
-        const { data: urlData } = supabase.storage.from('images').getPublicUrl(data.path)
-        image_url = urlData.publicUrl
+      // 압축 업로드(uploadImages) 사용 — 큰 사진 실패 방지
+      try {
+        const slot: ImageSlot = { file: imageFile, preview: imagePreview ?? '' }
+        const urls = await uploadImages(supabase, [slot], 'feed_')
+        image_url = urls[0] ?? null
+      } catch (e: any) {
+        setUploading(false)
+        alert(e?.message ?? '사진 업로드에 실패했어요')
+        return
       }
     }
-    const { error } = await supabase.from('feed_posts').insert({ content: content.trim(), image_url, user_id: user.id, nickname: user.nickname })
+    const { error } = await supabase.from('feed_posts').insert({
+      content: content.trim(), image_url, user_id: user.id, nickname: user.nickname,
+      place_name: placeName || null, location: placeAddr || null,
+      latitude: placeLat, longitude: placeLng,
+    })
     setUploading(false)
     if (!error) onSubmitted()
+    else alert('저장에 실패했어요. 다시 시도해주세요')
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg)' }}>
       <Header
         left={<button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '14px', color: 'var(--ink-3)', cursor: 'pointer', padding: '8px' }}>취소</button>}
         title="자랑하기"
@@ -299,8 +328,25 @@ function FeedForm({ user, onClose, onSubmitted }: { user: User; onClose: () => v
           )}
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)) } }} style={{ display: 'none' }} />
-        <textarea placeholder="오늘 뭘 뽑았나요? 자랑해보세요! 🎉" value={content} onChange={(e) => setContent(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '14.5px', outline: 'none', minHeight: '130px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
+        <textarea placeholder="오늘 뭘 뽑았나요? 자랑해보세요! 🎉" value={content} onChange={(e) => setContent(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '14.5px', outline: 'none', minHeight: '110px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
+
+        {/* 장소 (선택) — 마켓처럼 검색 */}
+        <Field label="어디서 뽑았어요?" optional>
+          {placeName ? (
+            <div style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)', position: 'relative' }}>
+              <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px', paddingRight: '32px' }}>📍 {placeName}</p>
+              {placeAddr && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{placeAddr}</p>}
+              <button onClick={() => { setPlaceName(''); setPlaceAddr(''); setPlaceLat(null); setPlaceLng(null) }} style={{ position: 'absolute', top: '12px', right: '12px', width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(255,255,255,0.8)', color: 'var(--ink-3)', fontSize: '13px', border: 'none', cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowPlaceSearch(true)} className="pressable" style={{ width: '100%', padding: '14px 15px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '15px', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', color: 'var(--ink-4)', display: 'flex', alignItems: 'center', gap: '8px' }}>🔍 뽑은 장소 검색하기 (선택)</button>
+          )}
+        </Field>
       </main>
+
+      {showPlaceSearch && (
+        <PlaceSearchSheet user={user} onSelect={handlePlaceSelect} onClose={() => setShowPlaceSearch(false)} />
+      )}
     </div>
   )
 }

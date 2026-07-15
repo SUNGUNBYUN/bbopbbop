@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { User, Place } from '@/lib/types'
+import { getOrCreatePlace, findNearbyPlaces } from '@/lib/points'
 import { Header, BackButton, Button, Input, Field } from './ui'
 
 declare global {
@@ -90,18 +91,9 @@ export function PlaceRegister({ user, onClose, onRegistered }: Props) {
       }
     })
 
-    // 근처 30m 이내 기존 업체 체크
-    const { data } = await supabase.from('places').select('*')
-    if (data) {
-      const near = data
-        .map(p => ({
-          id: p.id, name: p.name, lat: p.latitude, lng: p.longitude,
-          distance: getDistance(centerCoord.lat, centerCoord.lng, p.latitude, p.longitude),
-        }))
-        .filter(p => p.distance <= 30)
-        .sort((a, b) => a.distance - b.distance)
-      setNearby(near)
-    }
+    // 근처 50m 이내 기존 업체 체크 (RPC 사용)
+    const cands = await findNearbyPlaces(centerCoord.lat, centerCoord.lng)
+    setNearby(cands.map(c => ({ id: c.id, name: c.place_name, lat: c.latitude, lng: c.longitude, distance: c.distance_m })))
 
     setStep('info')
   }
@@ -112,19 +104,17 @@ export function PlaceRegister({ user, onClose, onRegistered }: Props) {
     setSubmitting(true)
     setError('')
 
-    const { data, error: insertError } = await supabase.from('places').insert({
-      name: name.trim(),
+    const res = await getOrCreatePlace({
+      placeName: name.trim(),
       address,
-      latitude: centerCoord.lat,
-      longitude: centerCoord.lng,
-      registered_by: user.id,
-      registered_nickname: user.nickname,
-    }).select().single()
+      lat: centerCoord.lat,
+      lng: centerCoord.lng,
+    })
 
     setSubmitting(false)
-    if (insertError) { setError('등록 중 오류가 발생했어요'); return }
+    if (!res) { setError('등록 중 오류가 발생했어요'); return }
 
-    // Place 형태로 변환해서 전달
+    // Place 형태로 변환해서 전달 (place_id를 kakao 자리에 실어 상위에서 활용 가능)
     onRegistered({
       place_name: name.trim(),
       address_name: address,
