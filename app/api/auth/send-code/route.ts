@@ -2,23 +2,43 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 const resend = new Resend(process.env.RESEND_API_KEY!)
 
+function isValidEmail(e: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
+}
+
 export async function POST(req: NextRequest) {
   const { email } = await req.json()
 
-  if (!email) return NextResponse.json({ error: '이메일을 입력해주세요' }, { status: 400 })
+  if (!email || !isValidEmail(email)) {
+    return NextResponse.json({ error: '올바른 이메일을 입력해주세요' }, { status: 400 })
+  }
 
   const { data: existing } = await supabase.auth.admin.listUsers()
   const alreadyExists = existing?.users?.some(u => u.email === email)
   if (alreadyExists) {
     return NextResponse.json({ error: '이미 가입된 이메일이에요' }, { status: 409 })
+  }
+
+  // rate limit: 같은 이메일에 60초 이내 재발송 차단 (스팸/비용 방지)
+  const { data: recent } = await supabase
+    .from('email_verifications')
+    .select('created_at')
+    .eq('email', email)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (recent?.created_at) {
+    const elapsed = Date.now() - new Date(recent.created_at).getTime()
+    if (elapsed < 60 * 1000) {
+      const wait = Math.ceil((60 * 1000 - elapsed) / 1000)
+      return NextResponse.json({ error: `${wait}초 후 다시 시도해주세요` }, { status: 429 })
+    }
   }
 
   const code = Math.floor(100000 + Math.random() * 900000).toString()

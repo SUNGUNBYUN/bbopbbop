@@ -47,15 +47,15 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
     const isLiked = likedFeeds.has(feed.id)
     if (isLiked) {
       await supabase.from('feed_likes').delete().eq('feed_id', feed.id).eq('user_id', user.id)
-      const c = feed.like_count - 1
-      await supabase.from('feed_posts').update({ like_count: c }).eq('id', feed.id)
+      const { data: rc } = await supabase.rpc('sync_feed_like_count', { p_feed_id: feed.id })
+      const c = typeof rc === 'number' ? rc : Math.max(0, feed.like_count - 1)
       likedFeeds.delete(feed.id); setLikedFeeds(new Set(likedFeeds))
       setFeeds(feeds.map(f => f.id === feed.id ? { ...f, like_count: c } : f))
     } else {
       const { error } = await supabase.from('feed_likes').insert({ feed_id: feed.id, user_id: user.id })
       if (!error) {
-        const c = feed.like_count + 1
-        await supabase.from('feed_posts').update({ like_count: c }).eq('id', feed.id)
+        const { data: rc } = await supabase.rpc('sync_feed_like_count', { p_feed_id: feed.id })
+        const c = typeof rc === 'number' ? rc : feed.like_count + 1
         likedFeeds.add(feed.id); setLikedFeeds(new Set(likedFeeds))
         setFeeds(feeds.map(f => f.id === feed.id ? { ...f, like_count: c } : f))
         notify({ userId: feed.user_id, actorId: user.id, actorNickname: user.nickname, type: 'feed_like', targetType: 'feed', targetId: feed.id })
@@ -154,7 +154,7 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, on
     const { error } = await supabase.from('feed_comments').insert({ feed_id: feed.id, user_id: user.id, nickname: user.nickname, content: newComment.trim() })
     if (!error) {
       const { data } = await supabase.from('feed_comments').select('*').eq('feed_id', feed.id).order('created_at', { ascending: true })
-      if (data) { setComments(data); await supabase.from('feed_posts').update({ comment_count: data.length }).eq('id', feed.id) }
+      if (data) { setComments(data); await supabase.rpc('sync_feed_comment_count', { p_feed_id: feed.id }) }
       setNewComment('')
       notify({ userId: feed.user_id, actorId: user.id, actorNickname: user.nickname, type: 'feed_comment', targetType: 'feed', targetId: feed.id })
     }

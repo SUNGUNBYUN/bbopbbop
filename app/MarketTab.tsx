@@ -107,7 +107,7 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
 }
 
 async function openDetail(item: MarketItem, setSelected: (i: MarketItem) => void) {
-  await supabase.from('market_items').update({ view_count: item.view_count + 1 }).eq('id', item.id)
+  await supabase.rpc('increment_market_view', { item_id: item.id })
   setSelected(item)
 }
 
@@ -139,15 +139,13 @@ function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item:
     if (!user) { onRequireAuth(); return }
     if (myLiked) {
       await supabase.from('market_likes').delete().eq('item_id', item.id).eq('user_id', user.id)
-      const c = likeCount - 1
-      await supabase.from('market_items').update({ like_count: c }).eq('id', item.id)
-      setMyLiked(false); setLikeCount(c)
+      const { data: c } = await supabase.rpc('sync_market_like_count', { p_item_id: item.id })
+      setMyLiked(false); setLikeCount(typeof c === 'number' ? c : Math.max(0, likeCount - 1))
     } else {
       const { error } = await supabase.from('market_likes').insert({ item_id: item.id, user_id: user.id })
       if (!error) {
-        const c = likeCount + 1
-        await supabase.from('market_items').update({ like_count: c }).eq('id', item.id)
-        setMyLiked(true); setLikeCount(c)
+        const { data: c } = await supabase.rpc('sync_market_like_count', { p_item_id: item.id })
+        setMyLiked(true); setLikeCount(typeof c === 'number' ? c : likeCount + 1)
         notify({ userId: item.user_id, actorId: user.id, actorNickname: user.nickname, type: 'market_like', targetType: 'market', targetId: item.id, targetTitle: item.title })
       }
     }

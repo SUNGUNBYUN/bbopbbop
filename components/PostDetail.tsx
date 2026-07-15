@@ -53,15 +53,13 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
     setLikeLoading(true)
     if (myLiked) {
       await supabase.from('likes').delete().eq('post_id', post.id).eq('user_id', user.id)
-      const c = likeCount - 1
-      await supabase.from('posts').update({ like_count: c }).eq('id', post.id)
-      setMyLiked(false); setLikeCount(c)
+      const { data: c } = await supabase.rpc('sync_post_like_count', { p_post_id: post.id })
+      setMyLiked(false); setLikeCount(typeof c === 'number' ? c : Math.max(0, likeCount - 1))
     } else {
       const { error } = await supabase.from('likes').insert({ post_id: post.id, user_id: user.id })
       if (!error) {
-        const c = likeCount + 1
-        await supabase.from('posts').update({ like_count: c }).eq('id', post.id)
-        setMyLiked(true); setLikeCount(c)
+        const { data: c } = await supabase.rpc('sync_post_like_count', { p_post_id: post.id })
+        setMyLiked(true); setLikeCount(typeof c === 'number' ? c : likeCount + 1)
         if (post.user_id) notify({
           userId: post.user_id, actorId: user.id, actorNickname: user.nickname,
           type: 'like', targetType: 'post', targetId: post.id, targetTitle: post.title,
@@ -97,7 +95,7 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
       if (inserted) {
         setComments(prev => prev.map(c => c.id === tempComment.id ? (inserted as Comment) : c))
       }
-      await supabase.from('posts').update({ comment_count: comments.length + 1 }).eq('id', post.id)
+      await supabase.rpc('sync_post_comment_count', { p_post_id: post.id })
       if (post.user_id) notify({
         userId: post.user_id, actorId: user.id, actorNickname: user.nickname,
         type: 'comment', targetType: 'post', targetId: post.id, targetTitle: post.title,

@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 검증용 임시 파일
+_*.js
+_sentinel.txt
