@@ -65,7 +65,7 @@ export default function Auth({ onClose, onSuccess }: Props) {
 
   // 인증번호 확인 → 로그인/가입 완료
   async function handleVerify() {
-    if (code.length !== 6) { setError('6자리 인증번호를 입력해주세요'); return }
+    if (code.length !== 8) { setError('8자리 인증번호를 입력해주세요'); return }
     setLoading(true); setError('')
     const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
     setLoading(false)
@@ -88,7 +88,7 @@ export default function Auth({ onClose, onSuccess }: Props) {
               : '뽑뽑에 오신 걸 환영해요'}
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--ink-3)', margin: 0 }}>
-            {step === 'verify' ? `${email}로 발송된 6자리 코드`
+            {step === 'verify' ? `${email}로 발송된 8자리 코드`
               : mode === 'login' ? '이메일로 인증번호를 보내드려요'
               : '이메일로 인증번호를 보내드려요'}
           </p>
@@ -126,7 +126,7 @@ export default function Auth({ onClose, onSuccess }: Props) {
               <Input
                 placeholder="000000"
                 value={code}
-                maxLength={6}
+                maxLength={8}
                 onChange={(e) => { setCode(e.target.value.replace(/\D/g, '')); setError('') }}
                 onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
                 style={{ fontSize: '22px', letterSpacing: '8px', textAlign: 'center', fontWeight: 700 }}
@@ -151,7 +151,7 @@ export default function Auth({ onClose, onSuccess }: Props) {
           </Button>
         )}
         {step === 'verify' && (
-          <Button full size="lg" onClick={handleVerify} disabled={loading || code.length !== 6}>
+          <Button full size="lg" onClick={handleVerify} disabled={loading || code.length !== 8}>
             {loading ? '확인 중...' : mode === 'signup' ? '🎉 가입 완료' : '로그인'}
           </Button>
         )}

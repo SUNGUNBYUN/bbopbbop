@@ -5,14 +5,18 @@
 
 -- 신규 유저 → 프로필 자동 생성
 create or replace function handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
-  insert into profiles (id, nickname)
+  insert into public.profiles (id, nickname)
   values (new.id, coalesce(new.raw_user_meta_data->>'nickname', new.email))
   on conflict (id) do nothing;
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
