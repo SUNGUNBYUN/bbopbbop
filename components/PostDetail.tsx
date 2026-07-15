@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Post, Comment, User } from '@/lib/types'
 import { timeAgo, freshness } from '@/lib/utils'
@@ -34,12 +34,18 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
 
   const isMine = user?.id === post.user_id
 
+  const viewedRef = useRef<string | null>(null)
+
   useEffect(() => {
     fetchDetail()
+    // 조회수는 이 제보에 대해 한 번만 (StrictMode 이중 호출/리렌더 방지)
+    if (viewedRef.current !== post.id) {
+      viewedRef.current = post.id
+      supabase.rpc('increment_view_count', { post_id: post.id })
+    }
   }, [post.id])
 
   async function fetchDetail() {
-    await supabase.rpc('increment_view_count', { post_id: post.id })
     const { data: postData } = await supabase.from('posts').select('*').eq('id', post.id).single()
     if (postData) { setViewCount(postData.view_count ?? 0); setLikeCount(postData.like_count ?? 0) }
     const { data: likesData } = await supabase.from('likes').select('*').eq('post_id', post.id)

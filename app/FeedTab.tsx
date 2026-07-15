@@ -58,6 +58,9 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
         const c = typeof rc === 'number' ? rc : feed.like_count + 1
         likedFeeds.add(feed.id); setLikedFeeds(new Set(likedFeeds))
         setFeeds(feeds.map(f => f.id === feed.id ? { ...f, like_count: c } : f))
+      } else {
+        // 실패 시 좋아요 표시 원복(이미 눌렀거나 오류)
+        likedFeeds.delete(feed.id); setLikedFeeds(new Set(likedFeeds))
         notify({ userId: feed.user_id, actorId: user.id, actorNickname: user.nickname, type: 'feed_like', targetType: 'feed', targetId: feed.id })
       }
     }

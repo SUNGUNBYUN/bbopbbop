@@ -191,7 +191,7 @@ export default function Home() {
               onClick={() => setShowMyPage(true)}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--surface-2)', border: 'none', borderRadius: 'var(--r-full)', padding: '6px 12px 6px 8px', cursor: 'pointer' }}
             >
-              <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800 }}>{user.nickname[0]}</div>
+              <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800 }}>{user.nickname?.[0] ?? '?'}</div>
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink-2)', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.nickname}</span>
             </button>
           ) : (

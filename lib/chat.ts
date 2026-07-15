@@ -19,10 +19,13 @@ export async function startOrGetChat(p: StartChatParams): Promise<string | null>
     .or(`and(user1_id.eq.${p.myId},user2_id.eq.${p.otherId}),and(user1_id.eq.${p.otherId},user2_id.eq.${p.myId})`)
 
   if (existing && existing.length > 0) {
-    // 같은 소스의 방이 있으면 그것, 없으면 첫 번째 방 재사용
+    // ⚠️ 같은 '소스(같은 제보/상품/피드)'의 방만 재사용한다.
+    //    소스가 다르면(다른 상품으로 대화 시작) 새 방을 만들어야 대화가 안 섞인다.
     const sameSource = existing.find(r => r.source_type === p.sourceType && r.source_id === p.sourceId)
     if (sameSource) return sameSource.id
-    return existing[0].id
+    // 소스 정보가 아예 없는(구버전) 방이면 재사용
+    const legacyRoom = existing.find(r => !r.source_type && !r.source_id)
+    if (legacyRoom) return legacyRoom.id
   }
 
   // 새 방 생성

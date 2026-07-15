@@ -80,7 +80,7 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
       {/* 프로필 카드 */}
       <div style={{ padding: '20px 20px 22px', background: 'linear-gradient(135deg, var(--coral) 0%, var(--coral-dark) 100%)', color: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 800, flexShrink: 0, fontFamily: 'var(--font-display)', backdropFilter: 'blur(4px)' }}>{user.nickname[0]}</div>
+          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 800, flexShrink: 0, fontFamily: 'var(--font-display)', backdropFilter: 'blur(4px)' }}>{user.nickname?.[0] ?? '?'}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: '19px', fontWeight: 800, margin: '0 0 3px' }}>{user.nickname}</p>
             <p style={{ fontSize: '12.5px', opacity: 0.85, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
