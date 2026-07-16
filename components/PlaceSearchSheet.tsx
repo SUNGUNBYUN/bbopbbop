@@ -191,12 +191,13 @@ function MapPreview({ place, onBack, onConfirm }: { place: Place; onBack: () => 
 
   return (
     <div style={{ position: 'fixed', inset: 0, height: '100dvh', background: 'var(--surface)', zIndex: 210, maxWidth: 'var(--app-max)', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
-      <header style={{ height: 'var(--header-h)', padding: '0 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+      <header style={{ height: 'var(--header-h)', padding: '0 8px 0 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         <button onClick={onBack} style={{ width: '40px', height: '40px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--ink-2)' }}>←</button>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{place.place_name}</p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.place_name}</p>
           <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.road_address_name || place.address_name}</p>
         </div>
+        <button onClick={onConfirm} className="pressable" style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 'var(--r-full)', background: 'var(--coral)', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>선택</button>
       </header>
 
       {/* 지도 + 버튼(지도 위 오버레이) — iOS에서도 버튼이 항상 보이도록 */}

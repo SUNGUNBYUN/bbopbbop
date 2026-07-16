@@ -138,24 +138,6 @@ export default function Home() {
     )
   }
 
-  // ===== 제보 작성 =====
-  if (showForm && user) {
-    return (
-      <div className="app-shell">
-        <PostForm
-          user={user}
-          onClose={() => setShowForm(false)}
-          onSubmitted={(earned, dupMsg) => {
-            setShowForm(false); fetchPosts(); refreshBalance()
-            if (dupMsg) showToast(dupMsg, '🔁')
-            else if (earned && earned > 0) showToast(`제보 완료! +${earned}P 적립 🎉`, '🎉')
-            else showToast('제보 완료! 다른 분이 확인하면 포인트를 드려요', '✅')
-          }}
-        />
-      </div>
-    )
-  }
-
   // ===== 메인 =====
   return (
     <div className="app-shell">
@@ -243,6 +225,21 @@ export default function Home() {
             }
           }}
         />
+      )}
+      {/* 제보 작성 오버레이 — 하단 네비 위로 뜸(네비 유지) */}
+      {showForm && user && (
+        <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'var(--nav-h)', background: 'var(--bg)', zIndex: 150, display: 'flex', flexDirection: 'column' }}>
+          <PostForm
+            user={user}
+            onClose={() => setShowForm(false)}
+            onSubmitted={(earned, dupMsg) => {
+              setShowForm(false); fetchPosts(); refreshBalance()
+              if (dupMsg) showToast(dupMsg, '🔁')
+              else if (earned && earned > 0) showToast(`제보 완료! +${earned}P 적립 🎉`, '🎉')
+              else showToast('제보 완료! 다른 분이 확인하면 포인트를 드려요', '✅')
+            }}
+          />
+        </div>
       )}
       {showAuth && <Auth onClose={() => setShowAuth(false)} onSuccess={() => { setShowAuth(false); showToast('환영해요!', '🎉') }} />}
       {toast && <Toast message={toast.msg} emoji={toast.emoji} />}
