@@ -306,13 +306,13 @@ function FeedForm({ user, onClose, onSubmitted }: { user: User; onClose: () => v
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)' }}>
       <Header
         left={<button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '14px', color: 'var(--ink-3)', cursor: 'pointer', padding: '8px' }}>취소</button>}
         title="자랑하기"
         right={<Button size="sm" onClick={handleSubmit} disabled={uploading || (!content.trim() && !imageFile)}>{uploading ? '올리는 중' : '올리기'}</Button>}
       />
-      <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <main className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div onClick={() => fileInputRef.current?.click()} className="pressable" style={{ width: '100%', aspectRatio: '4/3', borderRadius: 'var(--r-lg)', border: imagePreview ? 'none' : '2px dashed var(--line-2)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}>
           {imagePreview ? (
             <>

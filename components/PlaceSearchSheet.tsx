@@ -199,13 +199,14 @@ function MapPreview({ place, onBack, onConfirm }: { place: Place; onBack: () => 
         </div>
       </header>
 
-      <div ref={mapRef} style={{ flex: 1, width: '100%', minHeight: 0 }} />
-
-      {/* 하단 버튼 — iOS 홈바(safe-area) 고려 */}
-      <div style={{ padding: '16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', flexShrink: 0, borderTop: '1px solid var(--line)', background: 'var(--surface)' }}>
-        <button onClick={onConfirm} className="pressable" style={{ width: '100%', padding: '15px', borderRadius: 'var(--r-md)', background: 'var(--coral)', color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)' }}>
-          ✓ 이 업체로 선택하기
-        </button>
+      {/* 지도 + 버튼(지도 위 오버레이) — iOS에서도 버튼이 항상 보이도록 */}
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+        <div ref={mapRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', background: 'linear-gradient(to top, var(--surface) 60%, transparent)', zIndex: 5 }}>
+          <button onClick={onConfirm} className="pressable" style={{ width: '100%', padding: '15px', borderRadius: 'var(--r-md)', background: 'var(--coral)', color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)' }}>
+            ✓ 이 업체로 선택하기
+          </button>
+        </div>
       </div>
     </div>
   )
