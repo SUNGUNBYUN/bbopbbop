@@ -125,7 +125,7 @@ export function PlaceRegister({ user, onClose, onRegistered }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg)' }}>
+    <div style={{ position: 'fixed', inset: 0, height: '100dvh', maxWidth: 'var(--app-max)', margin: '0 auto', background: 'var(--bg)', zIndex: 210, display: 'flex', flexDirection: 'column' }}>
       <Header
         left={step === 'map' ? <BackButton onClick={onClose} /> : <BackButton onClick={() => setStep('map')} />}
         title={step === 'map' ? '업체 위치 지정' : '업체 정보 입력'}
@@ -133,47 +133,46 @@ export function PlaceRegister({ user, onClose, onRegistered }: Props) {
       />
 
       {step === 'map' ? (
-        <>
-          <div style={{ padding: '12px 16px', background: 'var(--coral-soft)', textAlign: 'center', flexShrink: 0 }}>
+        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+          <div ref={mapContainerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+
+          {/* 상단 안내 배너 (지도 위 오버레이) */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '12px 16px', background: 'var(--coral-soft)', textAlign: 'center', zIndex: 15 }}>
             <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--coral)', margin: 0 }}>
               지도를 움직여 업체 입구에 핀을 맞춰주세요
             </p>
           </div>
 
-          <div style={{ flex: 1, position: 'relative', minHeight: '300px' }}>
-            <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
-
-            {/* 중앙 고정 핀 */}
-            <div style={{
-              position: 'absolute', top: '50%', left: '50%',
-              transform: 'translate(-50%, -100%)', zIndex: 10, pointerEvents: 'none',
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{
-                  width: '40px', height: '40px', borderRadius: '50% 50% 50% 4px',
-                  transform: 'rotate(-45deg)', background: 'var(--coral)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(255,90,95,0.4)',
-                }}>
-                  <span style={{ transform: 'rotate(45deg)', fontSize: '18px' }}>🧸</span>
-                </div>
+          {/* 중앙 고정 핀 */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -100%)', zIndex: 10, pointerEvents: 'none',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '50% 50% 50% 4px',
+                transform: 'rotate(-45deg)', background: 'var(--coral)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(255,90,95,0.4)',
+              }}>
+                <span style={{ transform: 'rotate(45deg)', fontSize: '18px' }}>🧸</span>
               </div>
             </div>
-            {/* 핀 그림자 */}
-            <div style={{
-              position: 'absolute', top: '50%', left: '50%',
-              transform: 'translate(-50%, -2px)', zIndex: 9, pointerEvents: 'none',
-              width: '8px', height: '4px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)',
-            }} />
-
-            {/* 지도 위 floating 버튼 (iOS Safari에서도 항상 보임) */}
-            <div style={{ position: 'absolute', left: '16px', right: '16px', bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))', zIndex: 20 }}>
-              <Button full size="lg" onClick={confirmLocation} disabled={!loaded}>
-                이 위치로 지정하기
-              </Button>
-            </div>
           </div>
-        </>
+          {/* 핀 그림자 */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -2px)', zIndex: 9, pointerEvents: 'none',
+            width: '8px', height: '4px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)',
+          }} />
+
+          {/* 지도 위 하단 버튼 오버레이 (검색 화면과 동일 방식) */}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', background: 'linear-gradient(to top, var(--bg) 60%, transparent)', zIndex: 20 }}>
+            <button onClick={confirmLocation} disabled={!loaded} className="pressable" style={{ width: '100%', padding: '15px', borderRadius: 'var(--r-md)', background: 'var(--coral)', color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', opacity: loaded ? 1 : 0.5 }}>
+              ✓ 이 위치로 지정하기
+            </button>
+          </div>
+        </div>
       ) : (
         <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* 근처 중복 경고 */}
