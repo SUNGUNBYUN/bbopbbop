@@ -129,6 +129,7 @@ export function PlaceRegister({ user, onClose, onRegistered }: Props) {
       <Header
         left={step === 'map' ? <BackButton onClick={onClose} /> : <BackButton onClick={() => setStep('map')} />}
         title={step === 'map' ? '업체 위치 지정' : '업체 정보 입력'}
+        right={step === 'map' ? <SelectBtn onClick={confirmLocation} disabled={!loaded} /> : undefined}
       />
 
       {step === 'map' ? (
@@ -164,12 +165,13 @@ export function PlaceRegister({ user, onClose, onRegistered }: Props) {
               transform: 'translate(-50%, -2px)', zIndex: 9, pointerEvents: 'none',
               width: '8px', height: '4px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)',
             }} />
-          </div>
 
-          <div style={{ padding: '16px', flexShrink: 0 }}>
-            <Button full size="lg" onClick={confirmLocation} disabled={!loaded}>
-              이 위치로 지정하기
-            </Button>
+            {/* 지도 위 floating 버튼 (iOS Safari에서도 항상 보임) */}
+            <div style={{ position: 'absolute', left: '16px', right: '16px', bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))', zIndex: 20 }}>
+              <Button full size="lg" onClick={confirmLocation} disabled={!loaded}>
+                이 위치로 지정하기
+              </Button>
+            </div>
           </div>
         </>
       ) : (
@@ -224,6 +226,18 @@ export function PlaceRegister({ user, onClose, onRegistered }: Props) {
         </main>
       )}
     </div>
+  )
+}
+
+function SelectBtn({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{ background: 'var(--coral)', color: '#fff', border: 'none', borderRadius: '999px', padding: '7px 16px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: disabled ? 0.5 : 1 }}
+    >
+      선택
+    </button>
   )
 }
 
