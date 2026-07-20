@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { Place, User } from '@/lib/types'
+import { supabase } from '@/lib/supabase'
 import { PlaceRegister } from './PlaceRegister'
 
 declare global {
@@ -60,43 +61,84 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
     }
   }, [])
 
-  function search() {
-    if (!query.trim()) return
-    if (!kakaoReady || !window.kakao?.maps?.services) return
-    setSearching(true)
-    const ps = new window.kakao.maps.services.Places()
+  /** 우리 DB(직접 등록된 업체) 검색 */
+  async function searchOurPlaces(q: string): Promise<Place[]> {
+    const { data } = await supabase
+      .from('places')
+      .select('place_name, address, latitude, longitude')
+      .ilike('place_name', `%${q}%`)
+      .limit(15)
+    if (!data) return []
+    return data.map((p: any) => ({
+      place_name: p.place_name,
+      address_name: p.address ?? '',
+      road_address_name: p.address ?? '',
+      x: String(p.longitude),
+      y: String(p.latitude),
+      is_ours: true,
+    }))
+  }
 
-    const options: any = {}
-    if (myLoc) {
-      options.location = new window.kakao.maps.LatLng(myLoc.lat, myLoc.lng)
-      options.radius = 20000 // 20km 이내 우선
-      options.sort = window.kakao.maps.services.SortBy.DISTANCE
+  /** 카카오 키워드 검색 */
+  function searchKakao(q: string): Promise<Place[]> {
+    return new Promise((resolve) => {
+      if (!kakaoReady || !window.kakao?.maps?.services) { resolve([]); return }
+      const ps = new window.kakao.maps.services.Places()
+      const options: any = {}
+      if (myLoc) {
+        options.location = new window.kakao.maps.LatLng(myLoc.lat, myLoc.lng)
+        options.radius = 20000 // 20km 이내 우선
+        options.sort = window.kakao.maps.services.SortBy.DISTANCE
+      }
+      ps.keywordSearch(q, (data: any[], status: string) => {
+        if (status === window.kakao.maps.services.Status.OK) {
+          resolve(data.map((p: any) => ({
+            place_name: p.place_name,
+            address_name: p.address_name,
+            road_address_name: p.road_address_name,
+            x: p.x,
+            y: p.y,
+            category_name: p.category_name,
+            category_group_code: p.category_group_code,
+          })))
+        } else {
+          resolve([])
+        }
+      }, options)
+    })
+  }
+
+  async function search() {
+    const q = query.trim()
+    if (!q) return
+    setSearching(true)
+
+    const [ours, kakao] = await Promise.all([
+      searchOurPlaces(q).catch(() => [] as Place[]),
+      searchKakao(q).catch(() => [] as Place[]),
+    ])
+
+    // 같은 업체가 양쪽에 있으면 우리 DB 것을 우선 (이름 같고 30m 이내면 중복으로 봄)
+    const merged: Place[] = [...ours]
+    for (const k of kakao) {
+      const dup = ours.some(o =>
+        o.place_name.replace(/\s/g, '') === k.place_name.replace(/\s/g, '') &&
+        dist(parseFloat(o.y), parseFloat(o.x), parseFloat(k.y), parseFloat(k.x)) < 30
+      )
+      if (!dup) merged.push(k)
     }
 
-    ps.keywordSearch(query, (data: any[], status: string) => {
-      setSearching(false)
-      if (status === window.kakao.maps.services.Status.OK) {
-        let places: Place[] = data.map((p: any) => ({
-          place_name: p.place_name,
-          address_name: p.address_name,
-          road_address_name: p.road_address_name,
-          x: p.x,
-          y: p.y,
-          category_name: p.category_name,
-          category_group_code: p.category_group_code,
-        }))
-        // 내 위치 있으면 가까운 순 정렬
-        if (myLoc) {
-          places = places.sort((a, b) =>
-            dist(myLoc.lat, myLoc.lng, parseFloat(a.y), parseFloat(a.x)) -
-            dist(myLoc.lat, myLoc.lng, parseFloat(b.y), parseFloat(b.x))
-          )
-        }
-        setResults(places)
-      } else {
-        setResults([])
-      }
-    }, options)
+    // 내 위치 있으면: 우리 DB 먼저, 그 안에서 가까운 순
+    const sorted = myLoc
+      ? merged.sort((a, b) => {
+          if (!!a.is_ours !== !!b.is_ours) return a.is_ours ? -1 : 1
+          return dist(myLoc.lat, myLoc.lng, parseFloat(a.y), parseFloat(a.x)) -
+                 dist(myLoc.lat, myLoc.lng, parseFloat(b.y), parseFloat(b.x))
+        })
+      : merged
+
+    setResults(sorted)
+    setSearching(false)
   }
 
   if (showRegister) {
@@ -139,6 +181,11 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
             <div key={i} style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 4px' }}>
                 <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{place.place_name}</p>
+                {place.is_ours && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)', background: 'var(--mint-soft)', padding: '2px 7px', borderRadius: 'var(--r-full)', flexShrink: 0 }}>
+                    뽑뽑 등록
+                  </span>
+                )}
                 {myLoc && (
                   <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--coral)', background: 'var(--coral-soft)', padding: '2px 7px', borderRadius: 'var(--r-full)', flexShrink: 0 }}>
                     {formatDist(dist(myLoc.lat, myLoc.lng, parseFloat(place.y), parseFloat(place.x)))}

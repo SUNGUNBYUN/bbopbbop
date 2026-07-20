@@ -22,6 +22,7 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<MarketItem | null>(null)
   const [selected, setSelected] = useState<MarketItem | null>(null)
 
   useEffect(() => { fetchItems() }, [])
@@ -42,10 +43,10 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
   const filtered = items.filter(i => i.title.includes(search))
 
   if (selected) {
-    return <MarketDetail item={selected} user={user} onBack={() => { setSelected(null); fetchItems() }} onRequireAuth={onRequireAuth} onOpenChat={onOpenChat} />
+    return <MarketDetail item={selected} user={user} onBack={() => { setSelected(null); fetchItems() }} onEdit={() => { setEditing(selected); setSelected(null) }} onRequireAuth={onRequireAuth} onOpenChat={onOpenChat} />
   }
-  if (showForm && user) {
-    return <MarketForm user={user} onClose={() => setShowForm(false)} onSubmitted={() => { setShowForm(false); fetchItems() }} />
+  if ((showForm || editing) && user) {
+    return <MarketForm user={user} editing={editing} onClose={() => { setShowForm(false); setEditing(null) }} onSubmitted={() => { setShowForm(false); setEditing(null); fetchItems() }} />
   }
 
   return (
@@ -91,6 +92,9 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
                   <div style={{ padding: '9px 10px 11px' }}>
                     <p style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</p>
                     <p style={{ fontSize: '15px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: '0 0 6px' }}>{formatPrice(item.price, item.is_free)}</p>
+                    {item.place_name && (
+                      <p style={{ fontSize: '11.5px', color: 'var(--coral)', fontWeight: 700, margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📍 {item.place_name}</p>
+                    )}
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <Stat icon="❤️" value={item.like_count} />
                       <Stat icon="👁" value={item.view_count} />
@@ -113,7 +117,7 @@ async function openDetail(item: MarketItem, setSelected: (i: MarketItem) => void
   setSelected(item)
 }
 
-function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item: MarketItem; user: User | null; onBack: () => void; onRequireAuth: () => void; onOpenChat: OpenChat }) {
+function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }: { item: MarketItem; user: User | null; onBack: () => void; onEdit: () => void; onRequireAuth: () => void; onOpenChat: OpenChat }) {
   const [comments, setComments] = useState<any[]>([])
   const [newComment, setNewComment] = useState('')
   const [myLiked, setMyLiked] = useState(false)
@@ -203,6 +207,7 @@ function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item:
                 <>
                   <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
                   <div style={{ position: 'absolute', top: '42px', right: 0, background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-lg)', zIndex: 31, overflow: 'hidden', minWidth: '130px' }}>
+                    <button onClick={() => { setMenuOpen(false); onEdit() }} style={{ width: '100%', padding: '12px 16px', border: 'none', borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', fontSize: '14px', color: 'var(--ink)', fontWeight: 600, cursor: 'pointer' }}>✏️ 수정하기</button>
                     <button onClick={handleDelete} style={{ width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', fontSize: '14px', color: 'var(--danger)', fontWeight: 600, cursor: 'pointer' }}>🗑 삭제하기</button>
                   </div>
                 </>
@@ -242,9 +247,16 @@ function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item:
             <Avatar name={item.nickname} />
             <div>
               <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 2px' }}>{item.nickname ?? '익명'}</p>
-              <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(item.created_at)}</p>
+              <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(item.created_at)}{item.updated_at ? ' · 수정됨' : ''}</p>
             </div>
           </div>
+
+          {item.place_name && (
+            <div style={{ padding: '13px 14px', borderRadius: 'var(--r-md)', background: 'var(--coral-soft)', border: '1.5px solid var(--coral)' }}>
+              <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px' }}>📍 {item.place_name}</p>
+              {item.location && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{item.location}</p>}
+            </div>
+          )}
 
           {item.description && (
             <p style={{ fontSize: '14.5px', color: 'var(--ink-2)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{item.description}</p>
@@ -290,20 +302,27 @@ function MarketDetail({ item, user, onBack, onRequireAuth, onOpenChat }: { item:
   )
 }
 
-function MarketForm({ user, onClose, onSubmitted }: { user: User; onClose: () => void; onSubmitted: () => void }) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [price, setPrice] = useState('')
-  const [isFree, setIsFree] = useState(false)
-  const [tradeType, setTradeType] = useState('both')
+function MarketForm({ user, editing, onClose, onSubmitted }: { user: User; editing: MarketItem | null; onClose: () => void; onSubmitted: () => void }) {
+  const isEdit = !!editing
+  const [title, setTitle] = useState(editing?.title ?? '')
+  const [description, setDescription] = useState(editing?.description ?? '')
+  const [price, setPrice] = useState(editing && !editing.is_free && editing.price ? String(editing.price) : '')
+  const [isFree, setIsFree] = useState(editing?.is_free ?? false)
+  const [tradeType, setTradeType] = useState(editing?.trade_type ?? 'both')
+  // 수정 시 기존 사진(URL) / 새로 추가한 사진(File) 분리 관리
+  const [keptUrls, setKeptUrls] = useState<string[]>(
+    editing ? ((editing.images && editing.images.length > 0) ? editing.images : (editing.image_url ? [editing.image_url] : [])) : []
+  )
   const [images, setImages] = useState<ImageSlot[]>([])
   const [uploading, setUploading] = useState(false)
   const [errors, setErrors] = useState<{ image?: string; title?: string; price?: string }>({})
-  const [placeName, setPlaceName] = useState('')
-  const [placeAddr, setPlaceAddr] = useState('')
-  const [placeLat, setPlaceLat] = useState<number | null>(null)
-  const [placeLng, setPlaceLng] = useState<number | null>(null)
+  const [placeName, setPlaceName] = useState(editing?.place_name ?? '')
+  const [placeAddr, setPlaceAddr] = useState(editing?.location ?? '')
+  const [placeLat, setPlaceLat] = useState<number | null>(editing?.latitude ?? null)
+  const [placeLng, setPlaceLng] = useState<number | null>(editing?.longitude ?? null)
   const [showPlaceSearch, setShowPlaceSearch] = useState(false)
+
+  const totalPhotos = keptUrls.length + images.length
 
   function handlePlaceSelect(place: Place) {
     setPlaceName(place.place_name)
@@ -315,7 +334,7 @@ function MarketForm({ user, onClose, onSubmitted }: { user: User; onClose: () =>
 
   function validate() {
     const e: typeof errors = {}
-    if (images.length === 0) e.image = '사진을 추가해주세요'
+    if (totalPhotos === 0) e.image = '사진을 추가해주세요'
     if (!title.trim()) e.title = '제목을 입력해주세요'
     if (!isFree && !price.trim()) e.price = '가격을 입력하거나 나눔을 선택해주세요'
     setErrors(e); return Object.keys(e).length === 0
@@ -324,28 +343,62 @@ function MarketForm({ user, onClose, onSubmitted }: { user: User; onClose: () =>
   async function handleSubmit() {
     if (!validate()) return
     setUploading(true)
-    const urls = await uploadImages(supabase, images, 'market_')
-    const { error } = await supabase.from('market_items').insert({
+
+    let newUrls: string[] = []
+    if (images.length > 0) {
+      try {
+        newUrls = await uploadImages(supabase, images, 'market_')
+      } catch (e: any) {
+        setUploading(false)
+        alert(e?.message ?? '사진 업로드에 실패했어요')
+        return
+      }
+    }
+    const allUrls = [...keptUrls, ...newUrls]
+
+    const payload = {
       title, description, price: isFree ? 0 : parseInt(price) || 0, is_free: isFree,
-      trade_type: tradeType, image_url: urls[0] ?? null, images: urls,
-      user_id: user.id, nickname: user.nickname,
+      trade_type: tradeType, image_url: allUrls[0] ?? null, images: allUrls,
       place_name: placeName || null, location: placeAddr || null,
       latitude: placeLat, longitude: placeLng,
-    })
+    }
+
+    const { error } = isEdit
+      ? await supabase.from('market_items').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing!.id)
+      : await supabase.from('market_items').insert({ ...payload, user_id: user.id, nickname: user.nickname })
+
     setUploading(false)
     if (!error) onSubmitted()
+    else alert('저장에 실패했어요. 다시 시도해주세요')
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
       <Header
         left={<button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '14px', color: 'var(--ink-3)', cursor: 'pointer', padding: '8px' }}>취소</button>}
-        title="상품 등록"
-        right={<Button size="sm" onClick={handleSubmit} disabled={uploading}>{uploading ? '올리는 중' : '등록'}</Button>}
+        title={isEdit ? '상품 수정' : '상품 등록'}
+        right={<Button size="sm" onClick={handleSubmit} disabled={uploading}>{uploading ? '올리는 중' : isEdit ? '저장' : '등록'}</Button>}
       />
       <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <Field label="사진" required error={errors.image}>
-          <MultiImageUploader images={images} onChange={(imgs) => { setImages(imgs); setErrors(p => ({ ...p, image: undefined })) }} max={5} error={!!errors.image} />
+        {keptUrls.length > 0 && (
+          <Field label="등록된 사진">
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }} className="no-scrollbar">
+              {keptUrls.map((url, i) => (
+                <div key={url + i} style={{ position: 'relative', flexShrink: 0 }}>
+                  <div style={{ width: '84px', height: '84px', borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+                    <img src={url} alt="사진" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <button
+                    onClick={() => setKeptUrls(keptUrls.filter((_, idx) => idx !== i))}
+                    style={{ position: 'absolute', top: '-6px', right: '-6px', width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(26,21,35,0.75)', color: '#fff', fontSize: '12px', border: 'none', cursor: 'pointer' }}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          </Field>
+        )}
+        <Field label={keptUrls.length > 0 ? '사진 더 추가' : '사진'} required={keptUrls.length === 0} error={errors.image}>
+          <MultiImageUploader images={images} onChange={(imgs) => { setImages(imgs); setErrors(p => ({ ...p, image: undefined })) }} max={Math.max(1, 5 - keptUrls.length)} error={!!errors.image} />
         </Field>
         <Field label="제목" required error={errors.title}>
           <Input placeholder="예) 피카츄 봉제인형 (중) 팔아요" value={title} error={!!errors.title} onChange={(e) => { setTitle(e.target.value); setErrors(p => ({ ...p, title: undefined })) }} />

@@ -46,6 +46,8 @@ export type Place = {
   y: string
   category_name?: string
   category_group_code?: string
+  /** 뽑뽑에 직접 등록된 업체(카카오 검색에 없는 곳) */
+  is_ours?: boolean
 }
 
 export type SortKey = 'recent' | 'popular' | 'comments'
@@ -69,6 +71,7 @@ export type MarketItem = {
   view_count: number
   like_count: number
   created_at: string
+  updated_at: string | null
   bumped_at: string | null
 }
 
@@ -76,9 +79,15 @@ export type FeedPost = {
   id: string
   content: string | null
   image_url: string | null
+  images: string[] | null
   user_id: string
   nickname: string | null
   like_count: number
   comment_count: number
+  location: string | null
+  latitude: number | null
+  longitude: number | null
+  place_name: string | null
   created_at: string
+  updated_at: string | null
 }

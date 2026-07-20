@@ -1,12 +1,13 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { User, FeedPost, Place } from '@/lib/types'
 import { timeAgo } from '@/lib/utils'
 import { notify } from '@/lib/social'
 import { Header, BackButton, IconButton, Avatar, Button, Input, Field, EmptyState } from '@/components/ui'
 import { ReportSheet } from '@/components/ReportSheet'
-import { uploadImages, ImageSlot } from '@/components/MultiImageUploader'
+import { MultiImageUploader, uploadImages, ImageSlot } from '@/components/MultiImageUploader'
+import { ImageGallery } from '@/components/ImageGallery'
 import { PlaceSearchSheet } from '@/components/PlaceSearchSheet'
 
 type FeedComment = {
@@ -21,10 +22,34 @@ type FeedComment = {
 type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
 type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat }
 
+/** 글에 담긴 사진들을 배열로 (구버전 image_url 호환) */
+function galleryOf(feed: FeedPost): string[] {
+  if (feed.images && feed.images.length > 0) return feed.images
+  return feed.image_url ? [feed.image_url] : []
+}
+
+/** 장소 뱃지 */
+function PlaceBadge({ name, addr, size = 'sm' }: { name: string; addr?: string | null; size?: 'sm' | 'lg' }) {
+  if (size === 'lg') {
+    return (
+      <div style={{ padding: '13px 14px', borderRadius: 'var(--r-md)', background: 'var(--coral-soft)', border: '1.5px solid var(--coral)' }}>
+        <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px' }}>📍 {name}</p>
+        {addr && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{addr}</p>}
+      </div>
+    )
+  }
+  return (
+    <p style={{ fontSize: '12.5px', color: 'var(--coral)', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      📍 {name}
+    </p>
+  )
+}
+
 export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [feeds, setFeeds] = useState<FeedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<FeedPost | null>(null)
   const [selected, setSelected] = useState<FeedPost | null>(null)
   const [likedFeeds, setLikedFeeds] = useState<Set<string>>(new Set())
 
@@ -69,10 +94,28 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
   }
 
   if (selected) {
-    return <FeedDetail feed={selected} user={user} liked={likedFeeds.has(selected.id)} onToggleLike={() => handleLike(selected)} onBack={() => { setSelected(null); fetchFeeds() }} onRequireAuth={onRequireAuth} onOpenChat={onOpenChat} />
+    return (
+      <FeedDetail
+        feed={selected}
+        user={user}
+        liked={likedFeeds.has(selected.id)}
+        onToggleLike={() => handleLike(selected)}
+        onBack={() => { setSelected(null); fetchFeeds() }}
+        onEdit={() => { setEditing(selected); setSelected(null) }}
+        onRequireAuth={onRequireAuth}
+        onOpenChat={onOpenChat}
+      />
+    )
   }
-  if (showForm && user) {
-    return <FeedForm user={user} onClose={() => setShowForm(false)} onSubmitted={() => { setShowForm(false); fetchFeeds() }} />
+  if ((showForm || editing) && user) {
+    return (
+      <FeedForm
+        user={user}
+        editing={editing}
+        onClose={() => { setShowForm(false); setEditing(null) }}
+        onSubmitted={() => { setShowForm(false); setEditing(null); fetchFeeds() }}
+      />
+    )
   }
 
   return (
@@ -91,37 +134,51 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
         ) : feeds.length === 0 ? (
           <EmptyState emoji="📸" title="아직 자랑글이 없어요" desc="오늘 뽑은 인형을 제일 먼저 자랑해보세요!" action={<Button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }}>+ 자랑하기</Button>} />
         ) : (
-          feeds.map(feed => (
-            <div key={feed.id} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px' }}>
-                <Avatar name={feed.nickname} size={34} />
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{feed.nickname ?? '익명'}</p>
-                  <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(feed.created_at)}</p>
+          feeds.map(feed => {
+            const imgs = galleryOf(feed)
+            return (
+              <div key={feed.id} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px' }}>
+                  <Avatar name={feed.nickname} size={34} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{feed.nickname ?? '익명'}</p>
+                    <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0 }}>
+                      {timeAgo(feed.created_at)}{feed.updated_at ? ' · 수정됨' : ''}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              {feed.image_url && (
-                <div onClick={() => setSelected(feed)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '1', background: 'var(--surface-2)', overflow: 'hidden' }}>
-                  <img src={feed.image_url} alt="자랑" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                </div>
-              )}
-              <div style={{ padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: feed.content ? '10px' : 0 }}>
-                  <button onClick={() => handleLike(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                    <span style={{ fontSize: '19px' }}>{likedFeeds.has(feed.id) ? '❤️' : '🤍'}</span>
-                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.like_count}</span>
-                  </button>
-                  <button onClick={() => setSelected(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                    <span style={{ fontSize: '18px' }}>💬</span>
-                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.comment_count}</span>
-                  </button>
-                </div>
-                {feed.content && (
-                  <p onClick={() => setSelected(feed)} style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5, cursor: 'pointer', whiteSpace: 'pre-wrap' }}>{feed.content}</p>
+
+                {imgs.length > 0 && (
+                  <div onClick={() => setSelected(feed)} style={{ cursor: 'pointer' }}>
+                    <ImageGallery images={imgs} />
+                  </div>
                 )}
+
+                <div style={{ padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: (feed.content || feed.place_name) ? '10px' : 0 }}>
+                    <button onClick={() => handleLike(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      <span style={{ fontSize: '19px' }}>{likedFeeds.has(feed.id) ? '❤️' : '🤍'}</span>
+                      <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.like_count}</span>
+                    </button>
+                    <button onClick={() => setSelected(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      <span style={{ fontSize: '18px' }}>💬</span>
+                      <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.comment_count}</span>
+                    </button>
+                  </div>
+
+                  {feed.place_name && (
+                    <div style={{ marginBottom: feed.content ? '8px' : 0 }}>
+                      <PlaceBadge name={feed.place_name} />
+                    </div>
+                  )}
+
+                  {feed.content && (
+                    <p onClick={() => setSelected(feed)} style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5, cursor: 'pointer', whiteSpace: 'pre-wrap' }}>{feed.content}</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </main>
 
@@ -130,8 +187,8 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
   )
 }
 
-function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, onOpenChat }: {
-  feed: FeedPost; user: User | null; liked: boolean; onToggleLike: () => void; onBack: () => void; onRequireAuth: () => void; onOpenChat: OpenChat
+function FeedDetail({ feed, user, liked, onToggleLike, onBack, onEdit, onRequireAuth, onOpenChat }: {
+  feed: FeedPost; user: User | null; liked: boolean; onToggleLike: () => void; onBack: () => void; onEdit: () => void; onRequireAuth: () => void; onOpenChat: OpenChat
 }) {
   const [comments, setComments] = useState<FeedComment[]>([])
   const [newComment, setNewComment] = useState('')
@@ -140,6 +197,7 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, on
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const isMine = user?.id === feed.user_id
+  const imgs = galleryOf(feed)
 
   useEffect(() => {
     supabase.from('feed_comments').select('*').eq('feed_id', feed.id).order('created_at', { ascending: true }).then(({ data }) => {
@@ -184,6 +242,7 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, on
                 <>
                   <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
                   <div style={{ position: 'absolute', top: '42px', right: 0, background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-lg)', zIndex: 31, overflow: 'hidden', minWidth: '130px' }}>
+                    <button onClick={() => { setMenuOpen(false); onEdit() }} style={{ width: '100%', padding: '12px 16px', border: 'none', borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', fontSize: '14px', color: 'var(--ink)', fontWeight: 600, cursor: 'pointer' }}>✏️ 수정하기</button>
                     <button onClick={handleDelete} style={{ width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', fontSize: '14px', color: 'var(--danger)', fontWeight: 600, cursor: 'pointer' }}>🗑 삭제하기</button>
                   </div>
                 </>
@@ -198,19 +257,20 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, on
       />
 
       <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
-        {feed.image_url && (
-          <div style={{ width: '100%', maxHeight: '70vh', background: 'var(--surface-2)', display: 'flex', justifyContent: 'center' }}>
-            <img src={feed.image_url} alt="자랑" style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} />
-          </div>
-        )}
+        {imgs.length > 0 && <ImageGallery images={imgs} />}
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Avatar name={feed.nickname} />
             <div>
               <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 2px' }}>{feed.nickname ?? '익명'}</p>
-              <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(feed.created_at)}</p>
+              <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: 0 }}>
+                {timeAgo(feed.created_at)}{feed.updated_at ? ' · 수정됨' : ''}
+              </p>
             </div>
           </div>
+
+          {feed.place_name && <PlaceBadge name={feed.place_name} addr={feed.location} size="lg" />}
+
           {feed.content && <p style={{ fontSize: '15px', color: 'var(--ink)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{feed.content}</p>}
 
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -258,18 +318,21 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onRequireAuth, on
   )
 }
 
-function FeedForm({ user, onClose, onSubmitted }: { user: User; onClose: () => void; onSubmitted: () => void }) {
-  const [content, setContent] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing: FeedPost | null; onClose: () => void; onSubmitted: () => void }) {
+  const isEdit = !!editing
+  const [content, setContent] = useState(editing?.content ?? '')
+  // 수정 시 기존 사진(URL) / 새로 추가한 사진(File) 분리 관리
+  const [keptUrls, setKeptUrls] = useState<string[]>(editing ? galleryOf(editing) : [])
+  const [images, setImages] = useState<ImageSlot[]>([])
   const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   // 장소 (선택)
-  const [placeName, setPlaceName] = useState('')
-  const [placeAddr, setPlaceAddr] = useState('')
-  const [placeLat, setPlaceLat] = useState<number | null>(null)
-  const [placeLng, setPlaceLng] = useState<number | null>(null)
+  const [placeName, setPlaceName] = useState(editing?.place_name ?? '')
+  const [placeAddr, setPlaceAddr] = useState(editing?.location ?? '')
+  const [placeLat, setPlaceLat] = useState<number | null>(editing?.latitude ?? null)
+  const [placeLng, setPlaceLng] = useState<number | null>(editing?.longitude ?? null)
   const [showPlaceSearch, setShowPlaceSearch] = useState(false)
+
+  const totalPhotos = keptUrls.length + images.length
 
   function handlePlaceSelect(place: Place) {
     setPlaceName(place.place_name)
@@ -280,26 +343,35 @@ function FeedForm({ user, onClose, onSubmitted }: { user: User; onClose: () => v
   }
 
   async function handleSubmit() {
-    if (!content.trim() && !imageFile) return
+    if (!content.trim() && totalPhotos === 0) return
     setUploading(true)
-    let image_url: string | null = null
-    if (imageFile) {
-      // 압축 업로드(uploadImages) 사용 — 큰 사진 실패 방지
+
+    let newUrls: string[] = []
+    if (images.length > 0) {
       try {
-        const slot: ImageSlot = { file: imageFile, preview: imagePreview ?? '' }
-        const urls = await uploadImages(supabase, [slot], 'feed_')
-        image_url = urls[0] ?? null
+        newUrls = await uploadImages(supabase, images, 'feed_')
       } catch (e: any) {
         setUploading(false)
         alert(e?.message ?? '사진 업로드에 실패했어요')
         return
       }
     }
-    const { error } = await supabase.from('feed_posts').insert({
-      content: content.trim(), image_url, user_id: user.id, nickname: user.nickname,
-      place_name: placeName || null, location: placeAddr || null,
-      latitude: placeLat, longitude: placeLng,
-    })
+
+    const allUrls = [...keptUrls, ...newUrls]
+    const payload = {
+      content: content.trim(),
+      image_url: allUrls[0] ?? null,
+      images: allUrls,
+      place_name: placeName || null,
+      location: placeAddr || null,
+      latitude: placeLat,
+      longitude: placeLng,
+    }
+
+    const { error } = isEdit
+      ? await supabase.from('feed_posts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing!.id)
+      : await supabase.from('feed_posts').insert({ ...payload, user_id: user.id, nickname: user.nickname })
+
     setUploading(false)
     if (!error) onSubmitted()
     else alert('저장에 실패했어요. 다시 시도해주세요')
@@ -309,25 +381,35 @@ function FeedForm({ user, onClose, onSubmitted }: { user: User; onClose: () => v
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)' }}>
       <Header
         left={<button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '14px', color: 'var(--ink-3)', cursor: 'pointer', padding: '8px' }}>취소</button>}
-        title="자랑하기"
-        right={<Button size="sm" onClick={handleSubmit} disabled={uploading || (!content.trim() && !imageFile)}>{uploading ? '올리는 중' : '올리기'}</Button>}
+        title={isEdit ? '자랑글 수정' : '자랑하기'}
+        right={<Button size="sm" onClick={handleSubmit} disabled={uploading || (!content.trim() && totalPhotos === 0)}>{uploading ? '올리는 중' : isEdit ? '저장' : '올리기'}</Button>}
       />
       <main className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div onClick={() => fileInputRef.current?.click()} className="pressable" style={{ width: '100%', aspectRatio: '4/3', borderRadius: 'var(--r-lg)', border: imagePreview ? 'none' : '2px dashed var(--line-2)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}>
-          {imagePreview ? (
-            <>
-              <img src={imagePreview} alt="미리보기" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }} style={{ position: 'absolute', top: '10px', right: '10px', width: '30px', height: '30px', borderRadius: '50%', background: 'rgba(26,21,35,0.6)', color: '#fff', fontSize: '15px', border: 'none', cursor: 'pointer' }}>✕</button>
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: '40px' }}>📸</span>
-              <p style={{ fontSize: '14px', color: 'var(--ink-3)', margin: '10px 0 0', fontWeight: 600 }}>뽑기 결과를 자랑해보세요!</p>
-              <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: '4px 0 0' }}>탭해서 사진 추가</p>
-            </>
-          )}
-        </div>
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)) } }} style={{ display: 'none' }} />
+
+        {/* 기존 사진 (수정 시) */}
+        {keptUrls.length > 0 && (
+          <Field label="등록된 사진">
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }} className="no-scrollbar">
+              {keptUrls.map((url, i) => (
+                <div key={url + i} style={{ position: 'relative', flexShrink: 0 }}>
+                  <div style={{ width: '84px', height: '84px', borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+                    <img src={url} alt="사진" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <button
+                    onClick={() => setKeptUrls(keptUrls.filter((_, idx) => idx !== i))}
+                    style={{ position: 'absolute', top: '-6px', right: '-6px', width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(26,21,35,0.75)', color: '#fff', fontSize: '12px', border: 'none', cursor: 'pointer' }}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {/* 사진 추가 (여러 장) */}
+        <Field label={keptUrls.length > 0 ? '사진 더 추가' : '사진'} optional={keptUrls.length > 0}>
+          <MultiImageUploader images={images} onChange={setImages} max={Math.max(1, 5 - keptUrls.length)} />
+        </Field>
+
         <textarea placeholder="오늘 뭘 뽑았나요? 자랑해보세요! 🎉" value={content} onChange={(e) => setContent(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '14.5px', outline: 'none', minHeight: '110px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
 
         {/* 장소 (선택) — 마켓처럼 검색 */}
