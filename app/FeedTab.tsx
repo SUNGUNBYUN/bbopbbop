@@ -9,6 +9,7 @@ import { ReportSheet } from '@/components/ReportSheet'
 import { MultiImageUploader, uploadImages, ImageSlot } from '@/components/MultiImageUploader'
 import { ImageGallery } from '@/components/ImageGallery'
 import { PlaceSearchSheet } from '@/components/PlaceSearchSheet'
+import { PlaceMapView } from '@/components/PlaceMapView'
 
 type FeedComment = {
   id: string
@@ -51,6 +52,7 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<FeedPost | null>(null)
   const [selected, setSelected] = useState<FeedPost | null>(null)
+  const [mapPlace, setMapPlace] = useState<FeedPost | null>(null)
   const [likedFeeds, setLikedFeeds] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchFeeds() }, [])
@@ -168,7 +170,17 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
 
                   {feed.place_name && (
                     <div style={{ marginBottom: feed.content ? '8px' : 0 }}>
-                      <PlaceBadge name={feed.place_name} />
+                      {feed.latitude != null && feed.longitude != null ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMapPlace(feed) }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '100%' }}
+                        >
+                          <PlaceBadge name={feed.place_name} />
+                          <span style={{ fontSize: '11.5px', color: 'var(--ink-4)', fontWeight: 600, flexShrink: 0 }}>지도 ›</span>
+                        </button>
+                      ) : (
+                        <PlaceBadge name={feed.place_name} />
+                      )}
                     </div>
                   )}
 
@@ -183,6 +195,16 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
       </main>
 
       <button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }} className="pressable" style={{ position: 'absolute', bottom: 'calc(var(--nav-h) + 16px)', right: '18px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', fontSize: '28px', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', zIndex: 40 }}>+</button>
+
+      {mapPlace && mapPlace.place_name && mapPlace.latitude != null && mapPlace.longitude != null && (
+        <PlaceMapView
+          name={mapPlace.place_name}
+          address={mapPlace.location}
+          lat={mapPlace.latitude}
+          lng={mapPlace.longitude}
+          onClose={() => setMapPlace(null)}
+        />
+      )}
     </div>
   )
 }
@@ -196,6 +218,7 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onEdit, onRequire
   const [likeCount, setLikeCount] = useState(feed.like_count)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
+  const [showMap, setShowMap] = useState(false)
   const isMine = user?.id === feed.user_id
   const imgs = galleryOf(feed)
 
@@ -269,7 +292,21 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onEdit, onRequire
             </div>
           </div>
 
-          {feed.place_name && <PlaceBadge name={feed.place_name} addr={feed.location} size="lg" />}
+          {feed.place_name && (
+            feed.latitude != null && feed.longitude != null ? (
+              <button onClick={() => setShowMap(true)} className="pressable" style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer' }}>
+                <div style={{ padding: '13px 14px', borderRadius: 'var(--r-md)', background: 'var(--coral-soft)', border: '1.5px solid var(--coral)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px' }}>📍 {feed.place_name}</p>
+                    {feed.location && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{feed.location}</p>}
+                  </div>
+                  <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--coral)', flexShrink: 0 }}>지도 보기 ›</span>
+                </div>
+              </button>
+            ) : (
+              <PlaceBadge name={feed.place_name} addr={feed.location} size="lg" />
+            )
+          )}
 
           {feed.content && <p style={{ fontSize: '15px', color: 'var(--ink)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{feed.content}</p>}
 
@@ -313,6 +350,10 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onEdit, onRequire
 
       {showReport && (
         <ReportSheet user={user} targetType="feed" targetId={feed.id} targetUserId={feed.user_id} targetNickname={feed.nickname} onClose={() => setShowReport(false)} onRequireAuth={onRequireAuth} onDone={(msg) => { setShowReport(false); alert(msg) }} />
+      )}
+
+      {showMap && feed.place_name && feed.latitude != null && feed.longitude != null && (
+        <PlaceMapView name={feed.place_name} address={feed.location} lat={feed.latitude} lng={feed.longitude} onClose={() => setShowMap(false)} />
       )}
     </div>
   )

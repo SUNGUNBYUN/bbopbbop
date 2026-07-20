@@ -10,6 +10,7 @@ import { MultiImageUploader, ImageSlot, uploadImages } from '@/components/MultiI
 import { ImageGallery } from '@/components/ImageGallery'
 import { ReportSheet } from '@/components/ReportSheet'
 import { PlaceSearchSheet } from '@/components/PlaceSearchSheet'
+import { PlaceMapView } from '@/components/PlaceMapView'
 
 type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
 type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat }
@@ -24,6 +25,7 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<MarketItem | null>(null)
   const [selected, setSelected] = useState<MarketItem | null>(null)
+  const [mapPlace, setMapPlace] = useState<MarketItem | null>(null)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -93,7 +95,16 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
                     <p style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</p>
                     <p style={{ fontSize: '15px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: '0 0 6px' }}>{formatPrice(item.price, item.is_free)}</p>
                     {item.place_name && (
-                      <p style={{ fontSize: '11.5px', color: 'var(--coral)', fontWeight: 700, margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📍 {item.place_name}</p>
+                      item.latitude != null && item.longitude != null ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMapPlace(item) }}
+                          style={{ background: 'none', border: 'none', padding: 0, margin: '0 0 6px', cursor: 'pointer', display: 'block', width: '100%', textAlign: 'left' }}
+                        >
+                          <p style={{ fontSize: '11.5px', color: 'var(--coral)', fontWeight: 700, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📍 {item.place_name} ›</p>
+                        </button>
+                      ) : (
+                        <p style={{ fontSize: '11.5px', color: 'var(--coral)', fontWeight: 700, margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📍 {item.place_name}</p>
+                      )
                     )}
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <Stat icon="❤️" value={item.like_count} />
@@ -108,6 +119,16 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
       </main>
 
       <button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }} className="pressable" style={{ position: 'absolute', bottom: 'calc(var(--nav-h) + 16px)', right: '18px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', fontSize: '28px', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', zIndex: 40 }}>+</button>
+
+      {mapPlace && mapPlace.place_name && mapPlace.latitude != null && mapPlace.longitude != null && (
+        <PlaceMapView
+          name={mapPlace.place_name}
+          address={mapPlace.location}
+          lat={mapPlace.latitude}
+          lng={mapPlace.longitude}
+          onClose={() => setMapPlace(null)}
+        />
+      )}
     </div>
   )
 }
@@ -127,6 +148,7 @@ function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }:
   const [showReport, setShowReport] = useState(false)
   const [chatCount, setChatCount] = useState(0)
   const [bumping, setBumping] = useState(false)
+  const [showMap, setShowMap] = useState(false)
   const isMine = user?.id === item.user_id
   const badge = marketStatus(status)
   const gallery = (item.images && item.images.length > 0) ? item.images : (item.image_url ? [item.image_url] : [])
@@ -252,10 +274,22 @@ function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }:
           </div>
 
           {item.place_name && (
-            <div style={{ padding: '13px 14px', borderRadius: 'var(--r-md)', background: 'var(--coral-soft)', border: '1.5px solid var(--coral)' }}>
-              <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px' }}>📍 {item.place_name}</p>
-              {item.location && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{item.location}</p>}
-            </div>
+            item.latitude != null && item.longitude != null ? (
+              <button onClick={() => setShowMap(true)} className="pressable" style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer' }}>
+                <div style={{ padding: '13px 14px', borderRadius: 'var(--r-md)', background: 'var(--coral-soft)', border: '1.5px solid var(--coral)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px' }}>📍 {item.place_name}</p>
+                    {item.location && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{item.location}</p>}
+                  </div>
+                  <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--coral)', flexShrink: 0 }}>지도 보기 ›</span>
+                </div>
+              </button>
+            ) : (
+              <div style={{ padding: '13px 14px', borderRadius: 'var(--r-md)', background: 'var(--coral-soft)', border: '1.5px solid var(--coral)' }}>
+                <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px' }}>📍 {item.place_name}</p>
+                {item.location && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{item.location}</p>}
+              </div>
+            )
           )}
 
           {item.description && (
@@ -297,6 +331,10 @@ function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }:
 
       {showReport && (
         <ReportSheet user={user} targetType="market" targetId={item.id} targetUserId={item.user_id} targetNickname={item.nickname} onClose={() => setShowReport(false)} onRequireAuth={onRequireAuth} onDone={(msg) => { setShowReport(false); alert(msg) }} />
+      )}
+
+      {showMap && item.place_name && item.latitude != null && item.longitude != null && (
+        <PlaceMapView name={item.place_name} address={item.location} lat={item.latitude} lng={item.longitude} onClose={() => setShowMap(false)} />
       )}
     </div>
   )

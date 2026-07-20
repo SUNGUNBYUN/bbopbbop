@@ -8,6 +8,7 @@ import { verifyPost } from '@/lib/points'
 import { Header, BackButton, IconButton, Avatar, Button, Stat, Input } from './ui'
 import { ReportSheet } from './ReportSheet'
 import { ImageGallery } from './ImageGallery'
+import { PlaceMapView } from './PlaceMapView'
 
 type Props = {
   post: Post
@@ -16,10 +17,11 @@ type Props = {
   onRequireAuth: () => void
   onOpenChat: () => void
   onStartChat: () => void
+  onEdit: () => void
   onDeleted: () => void
 }
 
-export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onStartChat, onDeleted }: Props) {
+export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onStartChat, onEdit, onDeleted }: Props) {
   const [viewCount, setViewCount] = useState(0)
   const [likeCount, setLikeCount] = useState(0)
   const [myLiked, setMyLiked] = useState(false)
@@ -31,6 +33,7 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
   const [showReport, setShowReport] = useState(false)
   const [verifyCount, setVerifyCount] = useState(post.verify_count ?? 0)
   const [verifying, setVerifying] = useState(false)
+  const [showMap, setShowMap] = useState(false)
 
   const isMine = user?.id === post.user_id
 
@@ -154,6 +157,10 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
                       borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-lg)', zIndex: 31,
                       overflow: 'hidden', minWidth: '130px',
                     }}>
+                      <button onClick={() => { setMenuOpen(false); onEdit() }} style={{
+                        width: '100%', padding: '12px 16px', border: 'none', borderBottom: '1px solid var(--line)', background: 'none',
+                        textAlign: 'left', fontSize: '14px', color: 'var(--ink)', fontWeight: 600, cursor: 'pointer',
+                      }}>✏️ 수정하기</button>
                       <button onClick={handleDelete} style={{
                         width: '100%', padding: '12px 16px', border: 'none', background: 'none',
                         textAlign: 'left', fontSize: '14px', color: 'var(--danger)', fontWeight: 600, cursor: 'pointer',
@@ -207,10 +214,22 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
 
           {/* 위치 */}
           {post.location && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)' }}>
-              <span style={{ fontSize: '20px' }}>📍</span>
-              <p style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ink)', margin: 0, flex: 1 }}>{post.location}</p>
-            </div>
+            post.latitude != null && post.longitude != null ? (
+              <button
+                onClick={() => setShowMap(true)}
+                className="pressable"
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+              >
+                <span style={{ fontSize: '20px' }}>📍</span>
+                <p style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ink)', margin: 0, flex: 1 }}>{post.location}</p>
+                <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--coral)', flexShrink: 0 }}>지도 보기 ›</span>
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)' }}>
+                <span style={{ fontSize: '20px' }}>📍</span>
+                <p style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ink)', margin: 0, flex: 1 }}>{post.location}</p>
+              </div>
+            )
           )}
 
           {/* 좋아요 버튼 */}
@@ -305,6 +324,16 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
           onClose={() => setShowReport(false)}
           onRequireAuth={onRequireAuth}
           onDone={(msg) => { setShowReport(false); alert(msg) }}
+        />
+      )}
+
+      {showMap && post.latitude != null && post.longitude != null && (
+        <PlaceMapView
+          name={post.place_name || post.location || '뽑은 장소'}
+          address={post.location}
+          lat={post.latitude}
+          lng={post.longitude}
+          onClose={() => setShowMap(false)}
         />
       )}
     </div>

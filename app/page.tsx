@@ -30,6 +30,7 @@ export default function Home() {
   // 화면 오버레이 상태
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [showMyPage, setShowMyPage] = useState(false)
@@ -129,6 +130,7 @@ export default function Home() {
           onRequireAuth={requireAuth}
           onOpenChat={() => { setChatRoomId(null); setShowChat(true) }}
           onStartChat={startChat}
+          onEdit={() => { setEditingPost(selectedPost); setSelectedPost(null) }}
           onDeleted={() => { setSelectedPost(null); fetchPosts(); showToast('제보가 삭제되었어요', '🗑') }}
         />
         {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
@@ -227,14 +229,17 @@ export default function Home() {
         />
       )}
       {/* 제보 작성 오버레이 — 하단 네비 위로 뜸(네비 유지) */}
-      {showForm && user && (
+      {(showForm || editingPost) && user && (
         <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'var(--nav-h)', background: 'var(--bg)', zIndex: 150, display: 'flex', flexDirection: 'column' }}>
           <PostForm
             user={user}
-            onClose={() => setShowForm(false)}
+            editing={editingPost}
+            onClose={() => { setShowForm(false); setEditingPost(null) }}
             onSubmitted={(earned, dupMsg) => {
-              setShowForm(false); fetchPosts(); refreshBalance()
-              if (dupMsg) showToast(dupMsg, '🔁')
+              const wasEdit = !!editingPost
+              setShowForm(false); setEditingPost(null); fetchPosts(); refreshBalance()
+              if (wasEdit) showToast('제보를 수정했어요', '✏️')
+              else if (dupMsg) showToast(dupMsg, '🔁')
               else if (earned && earned > 0) showToast(`제보 완료! +${earned}P 적립 🎉`, '🎉')
               else showToast('제보 완료! 다른 분이 확인하면 포인트를 드려요', '✅')
             }}

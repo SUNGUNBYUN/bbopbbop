@@ -2,27 +2,34 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getOrCreatePlace, awardProductReport, findNearbyPlaces, placeProducts, looksLikeClawMachine, NearbyPlace, PlaceProduct } from '@/lib/points'
-import { User, Place } from '@/lib/types'
+import { User, Place, Post } from '@/lib/types'
 import { Header, BackButton, Button, Input, Field } from './ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from './MultiImageUploader'
 import { PlaceSearchSheet } from './PlaceSearchSheet'
 
 type Props = {
   user: User
+  /** 값이 있으면 수정 모드 */
+  editing?: Post | null
   onClose: () => void
   onSubmitted: (earnedPoints?: number, dupMessage?: string) => void
 }
 
 type Errors = { image?: string; title?: string; location?: string }
 
-export function PostForm({ user, onClose, onSubmitted }: Props) {
-  const [title, setTitle] = useState('')
-  const [location, setLocation] = useState('')
-  const [locationDetail, setLocationDetail] = useState('')
-  const [locationLat, setLocationLat] = useState<number | null>(null)
-  const [locationLng, setLocationLng] = useState<number | null>(null)
-  const [locationPlaceName, setLocationPlaceName] = useState('')
-  const [tags, setTags] = useState('')
+export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
+  const isEdit = !!editing
+  const [title, setTitle] = useState(editing?.title ?? '')
+  const [location, setLocation] = useState(editing?.place_name || editing?.location || '')
+  const [locationDetail, setLocationDetail] = useState(editing?.location ?? '')
+  const [locationLat, setLocationLat] = useState<number | null>(editing?.latitude ?? null)
+  const [locationLng, setLocationLng] = useState<number | null>(editing?.longitude ?? null)
+  const [locationPlaceName, setLocationPlaceName] = useState(editing?.place_name ?? '')
+  const [tags, setTags] = useState(editing?.tags ?? '')
+  // 수정 시 기존 사진(URL) / 새로 추가한 사진(File) 분리 관리
+  const [keptUrls, setKeptUrls] = useState<string[]>(
+    editing ? ((editing.images && editing.images.length > 0) ? editing.images : (editing.image_url ? [editing.image_url] : [])) : []
+  )
   const [images, setImages] = useState<ImageSlot[]>([])
   const [uploading, setUploading] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
@@ -62,9 +69,11 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
     setDupCandidates([])     // "아니요, 새 가게" → 후보 숨김
   }
 
+  const totalPhotos = keptUrls.length + images.length
+
   function validate() {
     const e: Errors = {}
-    if (images.length === 0) e.image = '사진을 추가해주세요'
+    if (totalPhotos === 0) e.image = '사진을 추가해주세요'
     if (!title.trim()) e.title = '뭐가 있는지 알려주세요'
     if (!location.trim()) e.location = '업체 위치를 입력해주세요'
     setErrors(e)
@@ -79,8 +88,33 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
 
   async function doSubmit(force: boolean) {
     setUploading(true)
-    const urls = await uploadImages(supabase, images)
+
+    let newUrls: string[] = []
+    if (images.length > 0) {
+      try {
+        newUrls = await uploadImages(supabase, images)
+      } catch (e: any) {
+        setUploading(false)
+        alert(e?.message ?? '사진 업로드에 실패했어요')
+        return
+      }
+    }
+    const urls = [...keptUrls, ...newUrls]
     const fullLocation = locationDetail ? `${location} (${locationDetail})` : location
+
+    // ── 수정 모드: 내용만 갱신 (포인트/중복 판정 없음) ──
+    if (isEdit && editing) {
+      const { error: upErr } = await supabase.from('posts').update({
+        title, location: fullLocation, tags,
+        image_url: urls[0] ?? null,
+        images: urls,
+        latitude: locationLat, longitude: locationLng, place_name: locationPlaceName,
+      }).eq('id', editing.id)
+      setUploading(false)
+      if (!upErr) onSubmitted()
+      else alert('저장에 실패했어요. 다시 시도해주세요')
+      return
+    }
 
     let placeId: string | null = null
     if (locationLat != null && locationLng != null) {
@@ -120,16 +154,34 @@ export function PostForm({ user, onClose, onSubmitted }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)' }}>
       <Header
         left={<button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '14px', color: 'var(--ink-3)', cursor: 'pointer', padding: '8px' }}>취소</button>}
-        title="제보하기"
-        right={<Button size="sm" onClick={handleSubmit} disabled={uploading}>{uploading ? '올리는 중' : '올리기'}</Button>}
+        title={isEdit ? '제보 수정' : '제보하기'}
+        right={<Button size="sm" onClick={handleSubmit} disabled={uploading}>{uploading ? '올리는 중' : isEdit ? '저장' : '올리기'}</Button>}
       />
 
       <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <Field label="사진" required error={errors.image}>
+        {keptUrls.length > 0 && (
+          <Field label="등록된 사진">
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }} className="no-scrollbar">
+              {keptUrls.map((url, i) => (
+                <div key={url + i} style={{ position: 'relative', flexShrink: 0 }}>
+                  <div style={{ width: '84px', height: '84px', borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+                    <img src={url} alt="사진" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <button
+                    onClick={() => setKeptUrls(keptUrls.filter((_, idx) => idx !== i))}
+                    style={{ position: 'absolute', top: '-6px', right: '-6px', width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(26,21,35,0.75)', color: '#fff', fontSize: '12px', border: 'none', cursor: 'pointer' }}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        <Field label={keptUrls.length > 0 ? '사진 더 추가' : '사진'} required={keptUrls.length === 0} error={errors.image}>
           <MultiImageUploader
             images={images}
             onChange={(imgs) => { setImages(imgs); setErrors(p => ({ ...p, image: undefined })) }}
-            max={5}
+            max={Math.max(1, 5 - keptUrls.length)}
             error={!!errors.image}
           />
           <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: '8px 0 0' }}>첫 번째 사진이 대표로 보여요. 최대 5장.</p>
