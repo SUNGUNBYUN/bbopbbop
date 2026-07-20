@@ -5,7 +5,7 @@ import { User, FeedPost, Place } from '@/lib/types'
 import { timeAgo } from '@/lib/utils'
 import { notify } from '@/lib/social'
 import { Header, BackButton, IconButton, Avatar, Button, Input, Field, EmptyState, LevelBadge } from '@/components/ui'
-import { getLevels, Level } from '@/lib/points'
+import { getLevels, Level, awardPoints, POINTS } from '@/lib/points'
 import { ReportSheet } from '@/components/ReportSheet'
 import { MultiImageUploader, uploadImages, ImageSlot } from '@/components/MultiImageUploader'
 import { ImageGallery } from '@/components/ImageGallery'
@@ -22,7 +22,7 @@ type FeedComment = {
 }
 
 type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
-type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat }
+type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat; onToast?: (msg: string, emoji?: string) => void }
 
 /** 글에 담긴 사진들을 배열로 (구버전 image_url 호환) */
 function galleryOf(feed: FeedPost): string[] {
@@ -47,7 +47,7 @@ function PlaceBadge({ name, addr, size = 'sm' }: { name: string; addr?: string |
   )
 }
 
-export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
+export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast }: Props) {
   const [feeds, setFeeds] = useState<FeedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -120,7 +120,13 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
         user={user}
         editing={editing}
         onClose={() => { setShowForm(false); setEditing(null) }}
-        onSubmitted={() => { setShowForm(false); setEditing(null); fetchFeeds() }}
+        onSubmitted={(earned) => {
+          const wasEdit = !!editing
+          setShowForm(false); setEditing(null); fetchFeeds()
+          if (wasEdit) onToast?.('자랑글을 수정했어요', '✏️')
+          else if (earned && earned > 0) onToast?.(`+${earned}P 적립! 🎉`, '🎉')
+          else onToast?.('자랑글을 올렸어요', '📸')
+        }}
       />
     )
   }
@@ -369,7 +375,7 @@ function FeedDetail({ feed, user, liked, onToggleLike, onBack, onEdit, onRequire
   )
 }
 
-function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing: FeedPost | null; onClose: () => void; onSubmitted: () => void }) {
+function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing: FeedPost | null; onClose: () => void; onSubmitted: (earned?: number) => void }) {
   const isEdit = !!editing
   const [content, setContent] = useState(editing?.content ?? '')
   // 수정 시 기존 사진(URL) / 새로 추가한 사진(File) 분리 관리
@@ -419,12 +425,26 @@ function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing
       longitude: placeLng,
     }
 
-    const { error } = isEdit
-      ? await supabase.from('feed_posts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing!.id)
-      : await supabase.from('feed_posts').insert({ ...payload, user_id: user.id, nickname: user.nickname })
+    let earned = 0
+    let error: any = null
+
+    if (isEdit) {
+      const r = await supabase.from('feed_posts')
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', editing!.id)
+      error = r.error
+    } else {
+      const r = await supabase.from('feed_posts')
+        .insert({ ...payload, user_id: user.id, nickname: user.nickname })
+        .select('id').single()
+      error = r.error
+      if (!error && r.data) {
+        earned = await awardPoints('feed', 'feed', r.data.id)
+      }
+    }
 
     setUploading(false)
-    if (!error) onSubmitted()
+    if (!error) onSubmitted(earned)
     else alert('저장에 실패했어요. 다시 시도해주세요')
   }
 
@@ -436,6 +456,14 @@ function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing
         right={<Button size="sm" onClick={handleSubmit} disabled={uploading || (!content.trim() && totalPhotos === 0)}>{uploading ? '올리는 중' : isEdit ? '저장' : '올리기'}</Button>}
       />
       <main className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+        {!isEdit && (
+          <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--butter-soft)' }}>
+            <p style={{ fontSize: '12.5px', color: 'var(--ink-2)', margin: 0, lineHeight: 1.6 }}>
+              🪙 자랑글을 올리면 <b>{POINTS.feed}P</b>를 드려요. <span style={{ color: 'var(--ink-4)' }}>(하루 3개까지)</span>
+            </p>
+          </div>
+        )}
 
         {/* 기존 사진 (수정 시) */}
         {keptUrls.length > 0 && (

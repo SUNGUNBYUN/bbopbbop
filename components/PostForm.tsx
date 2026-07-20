@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getOrCreatePlace, awardProductReport, findNearbyPlaces, placeProducts, looksLikeClawMachine, NearbyPlace, PlaceProduct } from '@/lib/points'
+import { getOrCreatePlace, awardProductReport, findNearbyPlaces, placeProducts, looksLikeClawMachine, NearbyPlace, PlaceProduct, POINTS } from '@/lib/points'
 import { User, Place, Post } from '@/lib/types'
 import { Header, BackButton, Button, Input, Field } from './ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from './MultiImageUploader'
@@ -117,6 +117,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
     }
 
     let placeId: string | null = null
+    let earned = 0
     if (locationLat != null && locationLng != null) {
       const pr = await getOrCreatePlace({
         placeName: locationPlaceName || location,
@@ -124,7 +125,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
         lat: locationLat, lng: locationLng,
         existingPlaceId: existingPlaceId,
       })
-      if (pr) placeId = pr.place_id
+      if (pr) { placeId = pr.place_id; earned += pr.place_reward ?? 0 }
     }
 
     const { data: post, error } = await supabase.from('posts').insert({
@@ -139,14 +140,13 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
     let wasDup = false
     if (!error && post && placeId) {
       const rr = await awardProductReport(post.id, placeId, title, force)
-      if (rr) wasDup = rr.is_dup
+      if (rr) { wasDup = rr.is_dup; earned += rr.post_reward ?? 0 }
     }
 
     setUploading(false)
     if (!error) {
-      // 즉시 지급은 0 — 재인증 시 확정. 중복이면 안내.
       const dupMsg = wasDup ? '이미 제보된 상품이라 포인트는 없어요. 정보는 갱신했어요!' : undefined
-      onSubmitted(0, dupMsg)
+      onSubmitted(earned, dupMsg)
     }
   }
 
@@ -159,6 +159,17 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
       />
 
       <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {!isEdit && (
+          <div style={{ padding: '13px 15px', borderRadius: 'var(--r-md)', background: 'var(--butter-soft)', border: '1.5px solid var(--butter)' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--warning)', margin: '0 0 6px' }}>🪙 포인트는 이렇게 들어와요</p>
+            <p style={{ fontSize: '12.5px', color: 'var(--ink-2)', margin: 0, lineHeight: 1.65 }}>
+              올리는 즉시 <b>{POINTS.report}P</b>, 다른 분이 “확인했어요”를 눌러주면 <b>+{POINTS.reportConfirmed}P</b>를 더 드려요.<br />
+              지도에 없던 <b>새 가게</b>라면 <b>+{POINTS.placeCreate}P</b>, 그 가게가 확인되면 <b>+{POINTS.placeConfirmed}P</b>가 추가돼요.<br />
+              <span style={{ color: 'var(--ink-4)' }}>이미 제보된 상품이면 포인트는 없어요.</span>
+            </p>
+          </div>
+        )}
+
         {keptUrls.length > 0 && (
           <Field label="등록된 사진">
             <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }} className="no-scrollbar">

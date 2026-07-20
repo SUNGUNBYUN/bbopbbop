@@ -9,12 +9,31 @@ import { supabase } from './supabase'
 export type AwardReason = 'place_create' | 'report' | 'reverify' | 'feed'
 export type SpendReason = 'spend_bump' | 'spend_pin' | 'spend_highlight' | 'spend_bounty'
 
-/** 사유별 안내용 포인트(서버 값과 일치시켜 UI에만 사용). 실제 지급은 서버가 결정 */
-export const POINT_VALUES: Record<AwardReason, number> = {
-  place_create: 100,
-  report: 30,
-  reverify: 10,
+/**
+ * 안내용 포인트 표 (서버 값과 일치시켜 UI 표시에만 사용).
+ * 실제 지급은 항상 서버가 결정합니다.
+ */
+export const POINTS = {
+  /** 새 가게를 처음 등록할 때 즉시 */
+  placeCreate: 20,
+  /** 그 가게가 다른 사람에게 처음 확인받으면 추가 */
+  placeConfirmed: 80,
+  /** 상품 제보 즉시 (중복이면 0) */
+  report: 10,
+  /** 그 제보가 처음 확인받으면 추가 */
+  reportConfirmed: 40,
+  /** 남의 제보를 확인해줄 때 (하루 10건까지) */
+  verify: 10,
+  /** 자랑글 (하루 3개까지) */
   feed: 5,
+} as const
+
+/** 하위 호환용 */
+export const POINT_VALUES: Record<AwardReason, number> = {
+  place_create: POINTS.placeCreate,
+  report: POINTS.report,
+  reverify: POINTS.verify,
+  feed: POINTS.feed,
 }
 
 /** 내 포인트 잔액 */
@@ -66,8 +85,9 @@ export async function getLedger(userId: string, limit = 30): Promise<LedgerRow[]
 export const REASON_LABELS: Record<string, string> = {
   place_create: '가게 첫 등록',
   place_confirmed: '가게 등록 확정',
+  report: '상품 제보',
   product_report: '상품 제보',
-  product_confirmed: '상품 확정 보상',
+  product_confirmed: '제보 확정 보상',
   reverify: '정보 재확인',
   feed: '자랑글 작성',
   spend_bump: '마켓 끌어올리기',
@@ -186,12 +206,22 @@ export type Level = {
   bg: string
 }
 
+/**
+ * 등급 문턱.
+ * 기준: 상품 제보 1건 확정 = 50P, 새 가게 1곳 확정 = 100P.
+ *  · 뽑친구  200P  → 제보 4건 정도. 첫 주 안에 도달하는 게 목표
+ *  · 뽑고수  800P  → 한 달쯤 꾸준히
+ *  · 뽑마스터 2500P → 3~4개월
+ *  · 뽑신    7000P → 1년 가까이. 소수만
+ *
+ * 나중에 낮추는 건 안전하지만(등급이 올라감) 올리면 기존 유저가 강등되니 주의.
+ */
 export const LEVELS: Level[] = [
   { key: 'seed',   name: '뽑린이',   emoji: '🌱', min: 0,    color: 'var(--ink-3)',   bg: 'var(--surface-2)' },
-  { key: 'friend', name: '뽑친구',   emoji: '🧸', min: 300,  color: 'var(--coral)',   bg: 'var(--coral-soft)' },
-  { key: 'pro',    name: '뽑고수',   emoji: '⭐', min: 1000, color: 'var(--warning)', bg: 'var(--butter-soft)' },
-  { key: 'master', name: '뽑마스터', emoji: '👑', min: 3000, color: 'var(--success)', bg: 'var(--mint-soft)' },
-  { key: 'god',    name: '뽑신',     emoji: '🏆', min: 8000, color: '#fff',           bg: 'var(--coral)' },
+  { key: 'friend', name: '뽑친구',   emoji: '🧸', min: 200,  color: 'var(--coral)',   bg: 'var(--coral-soft)' },
+  { key: 'pro',    name: '뽑고수',   emoji: '⭐', min: 800,  color: 'var(--warning)', bg: 'var(--butter-soft)' },
+  { key: 'master', name: '뽑마스터', emoji: '👑', min: 2500, color: 'var(--success)', bg: 'var(--mint-soft)' },
+  { key: 'god',    name: '뽑신',     emoji: '🏆', min: 7000, color: '#fff',           bg: 'var(--coral)' },
 ]
 
 /** 누적 적립 포인트 → 현재 등급 */

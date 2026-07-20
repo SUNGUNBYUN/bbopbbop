@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { timeAgo, formatPrice, marketStatus } from '@/lib/utils'
-import { getBalance, getLedger, LedgerRow, REASON_LABELS, getTotalEarned, levelOf, nextLevelOf } from '@/lib/points'
+import { getBalance, getLedger, LedgerRow, REASON_LABELS, getTotalEarned, levelOf, nextLevelOf, POINTS, PIN_COST, HIGHLIGHT_COST } from '@/lib/points'
 import { Header, BackButton, Button, EmptyState, Spinner, Stat } from '@/components/ui'
 
 type Post = { id: string; title: string; location: string | null; image_url: string | null; created_at: string; view_count: number; like_count: number; comment_count: number }
@@ -203,7 +203,52 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
             )}
 
             {section === 'points' && (
-              ledger.length === 0 ? <EmptyState emoji="🪙" title="아직 포인트 내역이 없어요" desc="가게·상품을 제보하고 포인트를 모아보세요!" /> : (
+              <>
+              {/* 포인트 안내 */}
+              <div style={{ padding: '15px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', marginBottom: '18px' }}>
+                <p style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--ink)', margin: '0 0 10px' }}>🪙 포인트 모으는 방법</p>
+                {[
+                  { t: '새 가게를 처음 등록', now: POINTS.placeCreate, later: POINTS.placeConfirmed },
+                  { t: '상품 제보', now: POINTS.report, later: POINTS.reportConfirmed },
+                ].map(r => (
+                  <div key={r.t} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{r.t}</span>
+                    <span style={{ fontSize: '12.5px', color: 'var(--ink-3)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      <b style={{ color: 'var(--coral)' }}>{r.now}P</b> + 확인되면 <b style={{ color: 'var(--coral)' }}>{r.later}P</b>
+                    </span>
+                  </div>
+                ))}
+                {[
+                  { t: '다른 사람 제보 확인해주기', v: `${POINTS.verify}P`, sub: '하루 10건까지' },
+                  { t: '자랑글 올리기', v: `${POINTS.feed}P`, sub: '하루 3개까지' },
+                  { t: '현상금 채택받기', v: '건 금액만큼', sub: '' },
+                ].map(r => (
+                  <div key={r.t} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>
+                      {r.t}{r.sub && <span style={{ fontSize: '11px', color: 'var(--ink-4)', fontWeight: 500 }}> · {r.sub}</span>}
+                    </span>
+                    <span style={{ fontSize: '13px', color: 'var(--coral)', fontWeight: 800, whiteSpace: 'nowrap' }}>{r.v}</span>
+                  </div>
+                ))}
+                <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: '10px 0 0', lineHeight: 1.55 }}>
+                  이미 제보된 상품은 포인트가 없어요. 같은 분의 제보만 반복해서 확인하면 하루 3회까지만 지급돼요.
+                </p>
+
+                <p style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--ink)', margin: '16px 0 10px' }}>💸 포인트 쓰는 곳</p>
+                {[
+                  { t: '마켓 끌어올리기', v: '20P' },
+                  { t: '마켓 상단 고정 (24시간)', v: `${PIN_COST}P` },
+                  { t: '마켓 강조 표시 (24시간)', v: `${HIGHLIGHT_COST}P` },
+                  { t: '제보 현상금 걸기', v: '10P~' },
+                ].map(r => (
+                  <div key={r.t} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{r.t}</span>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-3)', fontWeight: 800, whiteSpace: 'nowrap' }}>{r.v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {ledger.length === 0 ? <EmptyState emoji="🪙" title="아직 포인트 내역이 없어요" desc="가게·상품을 제보하고 포인트를 모아보세요!" /> : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   {ledger.map(row => (
                     <div key={row.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 4px', borderBottom: '1px solid var(--line)' }}>
@@ -217,7 +262,8 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
                     </div>
                   ))}
                 </div>
-              )
+              )}
+              </>
             )}
 
             {section === 'liked' && (

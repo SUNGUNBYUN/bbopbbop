@@ -9,6 +9,7 @@ import { Header, BackButton, IconButton, Avatar, Button, Stat, Input } from './u
 import { ReportSheet } from './ReportSheet'
 import { ImageGallery } from './ImageGallery'
 import { PlaceMapView } from './PlaceMapView'
+import { POINTS } from '@/lib/points'
 
 type Props = {
   post: Post
@@ -228,6 +229,26 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)' }}>
                 <span style={{ fontSize: '20px' }}>📍</span>
                 <p style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ink)', margin: 0, flex: 1 }}>{post.location}</p>
+              </div>
+            )
+          )}
+
+          {/* 포인트 확정 상태 (내 제보일 때만) */}
+          {isMine && (
+            post.reward_confirmed ? (
+              <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--mint-soft)', border: '1.5px solid var(--success)' }}>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--success)', margin: 0 }}>
+                  ✓ 확인 완료 — 포인트가 모두 지급됐어요
+                </p>
+              </div>
+            ) : (
+              <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--butter-soft)', border: '1.5px solid var(--butter)' }}>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--warning)', margin: '0 0 3px' }}>
+                  ⏳ 확인을 기다리는 중
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0, lineHeight: 1.55 }}>
+                  다른 분이 “확인했어요”를 눌러주면 <b>+{POINTS.reportConfirmed}P</b>를 더 드려요.
+                </p>
               </div>
             )
           )}

@@ -40,12 +40,14 @@ update profiles p
    set total_earned = coalesce((
      select sum(l.amount) from points_ledger l
       where l.user_id = p.id and l.amount > 0
+        and l.reason <> 'bounty_refund'
    ), 0);
 
 -- 앞으로는 적립될 때마다 자동 누적
 create or replace function trg_add_total_earned() returns trigger as $$
 begin
-  if new.amount > 0 then
+  -- 환불(내 포인트를 돌려받은 것)은 '적립'이 아니므로 등급에 반영하지 않음
+  if new.amount > 0 and new.reason <> 'bounty_refund' then
     update profiles set total_earned = total_earned + new.amount where id = new.user_id;
   end if;
   return new;
@@ -334,6 +336,60 @@ create policy "현상금 답변 조회 공개" on bounty_answers for select usin
 -- 답변 삭제는 본인만 (오답 정리용)
 drop policy if exists "현상금 답변 본인 삭제" on bounty_answers;
 create policy "현상금 답변 본인 삭제" on bounty_answers for delete using (auth.uid() = user_id);
+
+
+-- ============================================================
+--  5. 하루 적립 상한(200P) 계산 보정
+--     현상금으로 받은 포인트·환불은 '오늘 적립'에 포함하지 않음.
+--     (유저 간 이동이므로 새로 발행된 포인트가 아님)
+-- ============================================================
+create or replace function award_points(p_reason text, p_ref_type text default null, p_ref_id text default null)
+returns int as $$
+declare
+  v_user uuid := auth.uid();
+  v_amount int;
+  v_daily_total int;
+  v_today_start timestamptz := date_trunc('day', now());
+  v_feed_count int;
+  v_recent int;
+begin
+  if v_user is null then raise exception '로그인이 필요합니다'; end if;
+  v_amount := case p_reason
+    when 'place_create' then 100
+    when 'report' then 30
+    when 'reverify' then 10
+    when 'feed' then 5
+    else 0 end;
+  if v_amount = 0 then return 0; end if;
+
+  if p_reason = 'reverify' and p_ref_id is not null then
+    select count(*) into v_recent from points_ledger
+    where user_id = v_user and reason = 'reverify' and ref_id = p_ref_id
+      and created_at > now() - interval '24 hours';
+    if v_recent > 0 then return 0; end if;
+  end if;
+
+  if p_reason = 'feed' then
+    select count(*) into v_feed_count from points_ledger
+    where user_id = v_user and reason = 'feed' and created_at >= v_today_start;
+    if v_feed_count >= 3 then return 0; end if;
+  end if;
+
+  -- 현상금 관련 입금은 상한 계산에서 제외
+  select coalesce(sum(amount),0) into v_daily_total from points_ledger
+    where user_id = v_user and amount > 0
+      and reason not in ('bounty_reward', 'bounty_refund')
+      and created_at >= v_today_start;
+
+  if v_daily_total + v_amount > 200 then v_amount := greatest(0, 200 - v_daily_total); end if;
+  if v_amount = 0 then return 0; end if;
+
+  insert into points_ledger(user_id, amount, reason, ref_type, ref_id)
+  values (v_user, v_amount, p_reason, p_ref_type, p_ref_id);
+  update profiles set point_balance = point_balance + v_amount where id = v_user;
+  return v_amount;
+end;
+$$ language plpgsql security definer;
 
 
 -- ============================================================

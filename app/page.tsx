@@ -150,21 +150,7 @@ export default function Home() {
           onEdit={() => { setEditingPost(selectedPost); setSelectedPost(null) }}
           onDeleted={() => { setSelectedPost(null); fetchPosts(); showToast('제보가 삭제되었어요', '🗑') }}
         />
-        {showBounty && (
-        <BountyBoard
-          user={user}
-          posts={posts}
-          balance={balance}
-          onClose={() => setShowBounty(false)}
-          onRequireAuth={requireAuth}
-          onChanged={() => {
-            refreshBalance()
-            listBounties('open').then(list => setOpenBountyCount(list.length)).catch(() => {})
-          }}
-          onToast={showToast}
-        />
-      )}
-      {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
+        {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
         {showAuth && <Auth onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
         {toast && <Toast message={toast.msg} emoji={toast.emoji} />}
       </div>
@@ -233,7 +219,7 @@ export default function Home() {
         )}
         {activeTab === 1 && <MapTab onSelectPost={(p) => setSelectedPost(p as Post)} onSelectMarket={() => setActiveTab(2)} />}
         {activeTab === 2 && <MarketTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} />}
-        {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} />}
+        {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} onToast={showToast} />}
         {/* FAB — 제보 탭에서만 */}
         {activeTab === 0 && <FAB onClick={() => { if (!user) { requireAuth(); return }; setShowForm(true) }} />}
       </div>
@@ -287,7 +273,7 @@ export default function Home() {
               setShowForm(false); setEditingPost(null); fetchPosts(); refreshBalance()
               if (wasEdit) showToast('제보를 수정했어요', '✏️')
               else if (dupMsg) showToast(dupMsg, '🔁')
-              else if (earned && earned > 0) showToast(`제보 완료! +${earned}P 적립 🎉`, '🎉')
+              else if (earned && earned > 0) showToast(`+${earned}P 적립! 확인되면 더 드려요`, '🎉')
               else showToast('제보 완료! 다른 분이 확인하면 포인트를 드려요', '✅')
             }}
           />
