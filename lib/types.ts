@@ -73,6 +73,8 @@ export type MarketItem = {
   created_at: string
   updated_at: string | null
   bumped_at: string | null
+  pinned_until: string | null
+  highlight_until: string | null
 }
 
 export type FeedPost = {

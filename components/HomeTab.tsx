@@ -9,6 +9,8 @@ type Props = {
   loading: boolean
   onSelectPost: (post: Post) => void
   onNewPost: () => void
+  onOpenBounty: () => void
+  openBountyCount?: number
 }
 
 const SORTS: { key: SortKey; label: string }[] = [
@@ -17,7 +19,7 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'comments', label: '댓글순' },
 ]
 
-export function HomeTab({ posts, loading, onSelectPost, onNewPost }: Props) {
+export function HomeTab({ posts, loading, onSelectPost, onNewPost, onOpenBounty, openBountyCount = 0 }: Props) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('recent')
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -89,6 +91,36 @@ export function HomeTab({ posts, loading, onSelectPost, onNewPost }: Props) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* 현상금 진입 */}
+      <div style={{ padding: '10px 16px 0', flexShrink: 0 }}>
+        <button
+          onClick={onOpenBounty}
+          className="pressable"
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '13px 15px', borderRadius: 'var(--r-md)',
+            border: '1.5px solid var(--coral)', background: 'var(--coral-soft)',
+            cursor: 'pointer', textAlign: 'left',
+          }}
+        >
+          <span style={{ fontSize: '20px', flexShrink: 0 }}>🎯</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 2px' }}>
+              제보 현상금
+              {openBountyCount > 0 && (
+                <span style={{ marginLeft: '6px', fontSize: '11.5px', fontWeight: 800, color: '#fff', background: 'var(--coral)', padding: '2px 7px', borderRadius: 'var(--r-full)' }}>
+                  {openBountyCount}
+                </span>
+              )}
+            </p>
+            <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>
+              포인트를 걸고 찾는 인형을 물어보세요
+            </p>
+          </div>
+          <span style={{ fontSize: '13px', color: 'var(--coral)', fontWeight: 700, flexShrink: 0 }}>›</span>
+        </button>
       </div>
 
       {/* 정렬 */}

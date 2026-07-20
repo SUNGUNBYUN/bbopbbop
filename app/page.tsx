@@ -11,6 +11,8 @@ import { NotificationList } from '@/components/NotificationList'
 import { Onboarding } from '@/components/Onboarding'
 import { useOnboarding } from '@/lib/useOnboarding'
 import { HomeTab } from '@/components/HomeTab'
+import { BountyBoard } from '@/components/BountyBoard'
+import { listBounties } from '@/lib/bounty'
 import { BottomNav, FAB } from '@/components/BottomNav'
 import { PostDetail } from '@/components/PostDetail'
 import { PostForm } from '@/components/PostForm'
@@ -39,6 +41,8 @@ export default function Home() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [unread, setUnread] = useState(0)
   const [balance, setBalance] = useState(0)
+  const [showBounty, setShowBounty] = useState(false)
+  const [openBountyCount, setOpenBountyCount] = useState(0)
   const { show: showOnboarding, dismiss: dismissOnboarding } = useOnboarding()
 
   async function refreshBalance() {
@@ -48,6 +52,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchPosts()
+    listBounties('open').then(list => setOpenBountyCount(list.length)).catch(() => {})
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) setUserFromSession(session.user)
     })
@@ -145,7 +150,21 @@ export default function Home() {
           onEdit={() => { setEditingPost(selectedPost); setSelectedPost(null) }}
           onDeleted={() => { setSelectedPost(null); fetchPosts(); showToast('제보가 삭제되었어요', '🗑') }}
         />
-        {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
+        {showBounty && (
+        <BountyBoard
+          user={user}
+          posts={posts}
+          balance={balance}
+          onClose={() => setShowBounty(false)}
+          onRequireAuth={requireAuth}
+          onChanged={() => {
+            refreshBalance()
+            listBounties('open').then(list => setOpenBountyCount(list.length)).catch(() => {})
+          }}
+          onToast={showToast}
+        />
+      )}
+      {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
         {showAuth && <Auth onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
         {toast && <Toast message={toast.msg} emoji={toast.emoji} />}
       </div>
@@ -208,6 +227,8 @@ export default function Home() {
             loading={loading}
             onSelectPost={setSelectedPost}
             onNewPost={() => { if (!user) { requireAuth(); return }; setShowForm(true) }}
+            onOpenBounty={() => setShowBounty(true)}
+            openBountyCount={openBountyCount}
           />
         )}
         {activeTab === 1 && <MapTab onSelectPost={(p) => setSelectedPost(p as Post)} onSelectMarket={() => setActiveTab(2)} />}
@@ -221,6 +242,20 @@ export default function Home() {
       <BottomNav active={activeTab} onChange={setActiveTab} />
 
       {/* 오버레이 */}
+      {showBounty && (
+        <BountyBoard
+          user={user}
+          posts={posts}
+          balance={balance}
+          onClose={() => setShowBounty(false)}
+          onRequireAuth={requireAuth}
+          onChanged={() => {
+            refreshBalance()
+            listBounties('open').then(list => setOpenBountyCount(list.length)).catch(() => {})
+          }}
+          onToast={showToast}
+        />
+      )}
       {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
       {showMyPage && user && <MyPage user={user} onClose={() => setShowMyPage(false)} onSelectPost={(p) => { setShowMyPage(false); setSelectedPost(p) }} />}
       {showNotifications && user && (

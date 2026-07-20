@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { timeAgo, formatPrice, marketStatus } from '@/lib/utils'
-import { getBalance, getLedger, LedgerRow, REASON_LABELS } from '@/lib/points'
+import { getBalance, getLedger, LedgerRow, REASON_LABELS, getTotalEarned, levelOf, nextLevelOf } from '@/lib/points'
 import { Header, BackButton, Button, EmptyState, Spinner, Stat } from '@/components/ui'
 
 type Post = { id: string; title: string; location: string | null; image_url: string | null; created_at: string; view_count: number; like_count: number; comment_count: number }
@@ -13,6 +13,7 @@ type FeedPost = { id: string; content: string | null; image_url: string | null; 
 type Props = { user: User; onClose: () => void; onSelectPost: (post: any) => void }
 
 export default function MyPage({ user, onClose, onSelectPost }: Props) {
+  const [totalEarned, setTotalEarned] = useState(0)
   const [section, setSection] = useState<'posts' | 'market' | 'feed' | 'liked' | 'points'>('posts')
   const [myPosts, setMyPosts] = useState<Post[]>([])
   const [myMarket, setMyMarket] = useState<MarketItem[]>([])
@@ -24,7 +25,11 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
   const [counts, setCounts] = useState({ posts: 0, market: 0, feed: 0 })
 
   useEffect(() => { fetchData() }, [section])
-  useEffect(() => { fetchCounts(); getBalance(user.id).then(setBalance) }, [])
+  useEffect(() => {
+    fetchCounts()
+    getBalance(user.id).then(setBalance)
+    getTotalEarned(user.id).then(setTotalEarned)
+  }, [])
 
   async function fetchCounts() {
     const [p, m, f] = await Promise.all([
@@ -90,6 +95,30 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
             <p style={{ fontSize: '11px', opacity: 0.85, margin: '3px 0 0' }}>내 포인트</p>
           </div>
         </div>
+        {/* 등급 */}
+        {(() => {
+          const lv = levelOf(totalEarned)
+          const { next, remain, progress } = nextLevelOf(totalEarned)
+          return (
+            <div style={{ marginTop: '16px', padding: '13px 15px', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(4px)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: next ? '9px' : 0 }}>
+                <span style={{ fontSize: '15px', fontWeight: 800 }}>{lv.emoji} {lv.name}</span>
+                <span style={{ fontSize: '11.5px', opacity: 0.9, fontWeight: 600 }}>누적 {totalEarned.toLocaleString()}P</span>
+              </div>
+              {next && (
+                <>
+                  <div style={{ height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,0.3)', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.round(progress * 100)}%`, height: '100%', background: '#fff', borderRadius: '999px', transition: 'width 0.3s ease' }} />
+                  </div>
+                  <p style={{ fontSize: '11px', opacity: 0.9, margin: '6px 0 0' }}>
+                    {next.emoji} {next.name}까지 {remain.toLocaleString()}P 남았어요
+                  </p>
+                </>
+              )}
+            </div>
+          )
+        })()}
+
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
           {[{ n: counts.posts, l: '제보' }, { n: counts.market, l: '마켓' }, { n: counts.feed, l: '피드' }].map(s => (
             <div key={s.l} style={{ flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 'var(--r-md)', padding: '10px', textAlign: 'center', backdropFilter: 'blur(4px)' }}>

@@ -7,7 +7,7 @@ import { supabase } from './supabase'
    ============================================ */
 
 export type AwardReason = 'place_create' | 'report' | 'reverify' | 'feed'
-export type SpendReason = 'spend_bump'
+export type SpendReason = 'spend_bump' | 'spend_pin' | 'spend_highlight' | 'spend_bounty'
 
 /** 사유별 안내용 포인트(서버 값과 일치시켜 UI에만 사용). 실제 지급은 서버가 결정 */
 export const POINT_VALUES: Record<AwardReason, number> = {
@@ -71,6 +71,11 @@ export const REASON_LABELS: Record<string, string> = {
   reverify: '정보 재확인',
   feed: '자랑글 작성',
   spend_bump: '마켓 끌어올리기',
+  spend_pin: '마켓 상단 고정',
+  spend_highlight: '마켓 강조',
+  spend_bounty: '현상금 걸기',
+  bounty_reward: '현상금 획득',
+  bounty_refund: '현상금 환불',
 }
 
 /* ============================================
@@ -164,4 +169,97 @@ export function looksLikeClawMachine(categoryName?: string): boolean {
   if (!categoryName) return true // 정보 없으면 경고 안 띄움(오탐 방지)
   const kw = ['오락', '게임', '인형', '뽑기', '락커', '문화', '놀이', 'PC방', '노래']
   return kw.some(k => categoryName.includes(k))
+}
+
+
+/* ============================================
+   등급 (누적 적립 포인트 기준)
+   - 포인트를 써도 등급은 내려가지 않아요.
+   ============================================ */
+
+export type Level = {
+  key: string
+  name: string
+  emoji: string
+  min: number
+  color: string
+  bg: string
+}
+
+export const LEVELS: Level[] = [
+  { key: 'seed',   name: '뽑린이',   emoji: '🌱', min: 0,    color: 'var(--ink-3)',   bg: 'var(--surface-2)' },
+  { key: 'friend', name: '뽑친구',   emoji: '🧸', min: 300,  color: 'var(--coral)',   bg: 'var(--coral-soft)' },
+  { key: 'pro',    name: '뽑고수',   emoji: '⭐', min: 1000, color: 'var(--warning)', bg: 'var(--butter-soft)' },
+  { key: 'master', name: '뽑마스터', emoji: '👑', min: 3000, color: 'var(--success)', bg: 'var(--mint-soft)' },
+  { key: 'god',    name: '뽑신',     emoji: '🏆', min: 8000, color: '#fff',           bg: 'var(--coral)' },
+]
+
+/** 누적 적립 포인트 → 현재 등급 */
+export function levelOf(totalEarned: number): Level {
+  let current = LEVELS[0]
+  for (const lv of LEVELS) {
+    if (totalEarned >= lv.min) current = lv
+  }
+  return current
+}
+
+/** 다음 등급까지 남은 포인트 (최고 등급이면 next=null) */
+export function nextLevelOf(totalEarned: number): { next: Level | null; remain: number; progress: number } {
+  const current = levelOf(totalEarned)
+  const idx = LEVELS.findIndex(l => l.key === current.key)
+  const next = idx >= 0 && idx < LEVELS.length - 1 ? LEVELS[idx + 1] : null
+  if (!next) return { next: null, remain: 0, progress: 1 }
+  const span = next.min - current.min
+  const done = totalEarned - current.min
+  return {
+    next,
+    remain: Math.max(0, next.min - totalEarned),
+    progress: span > 0 ? Math.min(1, done / span) : 1,
+  }
+}
+
+/** 내 누적 적립 포인트 */
+export async function getTotalEarned(userId: string): Promise<number> {
+  const { data } = await supabase.from('profiles').select('total_earned').eq('id', userId).single()
+  return data?.total_earned ?? 0
+}
+
+/** 여러 유저의 등급을 한 번에 (목록에서 작성자 뱃지 표시용) */
+export async function getLevels(userIds: string[]): Promise<Record<string, Level>> {
+  const ids = Array.from(new Set(userIds.filter(Boolean)))
+  if (ids.length === 0) return {}
+  const { data } = await supabase.from('profiles').select('id, total_earned').in('id', ids)
+  const map: Record<string, Level> = {}
+  for (const row of data ?? []) {
+    map[(row as any).id] = levelOf((row as any).total_earned ?? 0)
+  }
+  return map
+}
+
+
+/* ============================================
+   마켓 노출 강화
+   ============================================ */
+
+export const PIN_COST = 100        // 상단 고정 24시간
+export const HIGHLIGHT_COST = 50   // 강조 테두리 24시간
+
+export type BoostKind = 'pin' | 'highlight'
+
+/** 상단 고정 / 강조 구매. 성공 시 만료 시각(ISO) 반환 */
+export async function boostMarketItem(itemId: string, kind: BoostKind): Promise<string> {
+  const cost = kind === 'pin' ? PIN_COST : HIGHLIGHT_COST
+  const { data, error } = await supabase.rpc('boost_market_item', {
+    p_item_id: itemId,
+    p_kind: kind,
+    p_cost: cost,
+  })
+  if (error) throw new Error(error.message || '설정에 실패했어요')
+  return data as string
+}
+
+/** 아직 유효한지 */
+export function isActive(until: string | null | undefined): boolean {
+  if (!until) return false
+  return new Date(until).getTime() > Date.now()
 }

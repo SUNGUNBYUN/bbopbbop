@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { User, FeedPost, Place } from '@/lib/types'
 import { timeAgo } from '@/lib/utils'
 import { notify } from '@/lib/social'
-import { Header, BackButton, IconButton, Avatar, Button, Input, Field, EmptyState } from '@/components/ui'
+import { Header, BackButton, IconButton, Avatar, Button, Input, Field, EmptyState, LevelBadge } from '@/components/ui'
+import { getLevels, Level } from '@/lib/points'
 import { ReportSheet } from '@/components/ReportSheet'
 import { MultiImageUploader, uploadImages, ImageSlot } from '@/components/MultiImageUploader'
 import { ImageGallery } from '@/components/ImageGallery'
@@ -54,6 +55,7 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [selected, setSelected] = useState<FeedPost | null>(null)
   const [mapPlace, setMapPlace] = useState<FeedPost | null>(null)
   const [likedFeeds, setLikedFeeds] = useState<Set<string>>(new Set())
+  const [levels, setLevels] = useState<Record<string, Level>>({})
 
   useEffect(() => { fetchFeeds() }, [])
   useEffect(() => { if (user) fetchMyLikes() }, [user])
@@ -61,7 +63,10 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
   async function fetchFeeds() {
     setLoading(true)
     const { data } = await supabase.from('feed_posts').select('*').order('created_at', { ascending: false })
-    if (data) setFeeds(data)
+    if (data) {
+      setFeeds(data)
+      getLevels(data.map(d => d.user_id)).then(setLevels).catch(() => {})
+    }
     setLoading(false)
   }
 
@@ -143,7 +148,12 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat }: Props) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px' }}>
                   <Avatar name={feed.nickname} size={34} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{feed.nickname ?? '익명'}</p>
+                    <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{feed.nickname ?? '익명'}</span>
+                      {levels[feed.user_id] && (
+                        <LevelBadge {...levels[feed.user_id]} />
+                      )}
+                    </p>
                     <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0 }}>
                       {timeAgo(feed.created_at)}{feed.updated_at ? ' · 수정됨' : ''}
                     </p>

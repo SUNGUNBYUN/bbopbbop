@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { User, MarketItem, Place } from '@/lib/types'
 import { timeAgo, formatPrice, tradeTypeText, marketStatus } from '@/lib/utils'
 import { notify } from '@/lib/social'
-import { bumpMarketItem } from '@/lib/points'
+import { bumpMarketItem, boostMarketItem, isActive, PIN_COST, HIGHLIGHT_COST } from '@/lib/points'
 import { Header, BackButton, IconButton, Avatar, Button, Input, Field, Badge, Stat, EmptyState } from '@/components/ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from '@/components/MultiImageUploader'
 import { ImageGallery } from '@/components/ImageGallery'
@@ -33,10 +33,13 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
     setLoading(true)
     const { data } = await supabase.from('market_items').select('*')
     if (data) {
-      // 끌어올린 시각(없으면 등록 시각) 기준 최신순
-      const sorted = [...data].sort((a, b) =>
-        new Date(b.bumped_at ?? b.created_at).getTime() - new Date(a.bumped_at ?? a.created_at).getTime()
-      )
+      // 상단 고정이 먼저, 그 다음 끌어올린 시각(없으면 등록 시각) 기준 최신순
+      const sorted = [...data].sort((a, b) => {
+        const pa = isActive(a.pinned_until) ? 1 : 0
+        const pb = isActive(b.pinned_until) ? 1 : 0
+        if (pa !== pb) return pb - pa
+        return new Date(b.bumped_at ?? b.created_at).getTime() - new Date(a.bumped_at ?? a.created_at).getTime()
+      })
       setItems(sorted)
     }
     setLoading(false)
@@ -80,8 +83,11 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
             {filtered.map(item => {
               const badge = marketStatus(item.status)
               return (
-                <div key={item.id} onClick={() => openDetail(item, setSelected)} className="pressable" style={{ cursor: 'pointer', background: 'var(--surface)', borderRadius: 'var(--r-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                <div key={item.id} onClick={() => openDetail(item, setSelected)} className="pressable" style={{ cursor: 'pointer', background: 'var(--surface)', borderRadius: 'var(--r-md)', overflow: 'hidden', boxShadow: isActive(item.highlight_until) ? '0 0 0 2px var(--coral)' : 'var(--shadow-sm)' }}>
                   <div style={{ width: '100%', aspectRatio: '1', overflow: 'hidden', background: 'var(--surface-2)', position: 'relative' }}>
+                    {isActive(item.pinned_until) && (
+                      <div style={{ position: 'absolute', top: '6px', left: '6px', zIndex: 2, fontSize: '10px', fontWeight: 800, color: '#fff', background: 'var(--coral)', padding: '3px 7px', borderRadius: 'var(--r-full)' }}>📌 고정</div>
+                    )}
                     {item.image_url
                       ? <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', opacity: 0.5 }}>🧸</div>}
@@ -148,6 +154,9 @@ function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }:
   const [showReport, setShowReport] = useState(false)
   const [chatCount, setChatCount] = useState(0)
   const [bumping, setBumping] = useState(false)
+  const [boosting, setBoosting] = useState(false)
+  const [pinnedUntil, setPinnedUntil] = useState(item.pinned_until)
+  const [highlightUntil, setHighlightUntil] = useState(item.highlight_until)
   const [showMap, setShowMap] = useState(false)
   const isMine = user?.id === item.user_id
   const badge = marketStatus(status)
@@ -213,6 +222,23 @@ function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }:
       alert(e.message ?? '끌어올리기에 실패했어요')
     } finally {
       setBumping(false)
+    }
+  }
+
+  async function handleBoost(kind: 'pin' | 'highlight') {
+    if (!user) { onRequireAuth(); return }
+    const cost = kind === 'pin' ? PIN_COST : HIGHLIGHT_COST
+    const label = kind === 'pin' ? '상단 고정' : '강조 표시'
+    if (!confirm(`${cost}포인트로 24시간 동안 ${label}할까요?`)) return
+    setBoosting(true)
+    try {
+      const until = await boostMarketItem(item.id, kind)
+      if (kind === 'pin') setPinnedUntil(until); else setHighlightUntil(until)
+      alert(`${label} 적용됐어요!`)
+    } catch (e: any) {
+      alert(e.message ?? '설정에 실패했어요')
+    } finally {
+      setBoosting(false)
     }
   }
 
@@ -312,6 +338,31 @@ function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }:
                 className="pressable"
                 style={{ width: '100%', padding: '13px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)', color: 'var(--coral)', fontSize: '14px', fontWeight: 700, cursor: bumping ? 'default' : 'pointer', opacity: bumping ? 0.6 : 1 }}
               >{bumping ? '끌어올리는 중…' : `🔝 끌어올리기 (${BUMP_COST}P)`}</button>
+
+              {/* 노출 강화 */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => handleBoost('pin')}
+                  disabled={boosting}
+                  className="pressable"
+                  style={{ flex: 1, padding: '13px 8px', borderRadius: 'var(--r-md)', border: isActive(pinnedUntil) ? '1.5px solid var(--coral)' : '1.5px solid var(--line)', background: isActive(pinnedUntil) ? 'var(--coral-soft)' : 'var(--surface)', color: isActive(pinnedUntil) ? 'var(--coral)' : 'var(--ink-3)', fontSize: '13px', fontWeight: 700, cursor: boosting ? 'default' : 'pointer', opacity: boosting ? 0.6 : 1 }}
+                >
+                  📌 상단 고정 ({PIN_COST}P)
+                  {isActive(pinnedUntil) && <span style={{ display: 'block', fontSize: '10.5px', fontWeight: 600, marginTop: '2px' }}>적용 중</span>}
+                </button>
+                <button
+                  onClick={() => handleBoost('highlight')}
+                  disabled={boosting}
+                  className="pressable"
+                  style={{ flex: 1, padding: '13px 8px', borderRadius: 'var(--r-md)', border: isActive(highlightUntil) ? '1.5px solid var(--coral)' : '1.5px solid var(--line)', background: isActive(highlightUntil) ? 'var(--coral-soft)' : 'var(--surface)', color: isActive(highlightUntil) ? 'var(--coral)' : 'var(--ink-3)', fontSize: '13px', fontWeight: 700, cursor: boosting ? 'default' : 'pointer', opacity: boosting ? 0.6 : 1 }}
+                >
+                  ✨ 강조 ({HIGHLIGHT_COST}P)
+                  {isActive(highlightUntil) && <span style={{ display: 'block', fontSize: '10.5px', fontWeight: 600, marginTop: '2px' }}>적용 중</span>}
+                </button>
+              </div>
+              <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: '-8px 0 0', textAlign: 'center' }}>
+                각 24시간 유지 · 중복 구매하면 시간이 이어져요
+              </p>
             </>
           )}
 

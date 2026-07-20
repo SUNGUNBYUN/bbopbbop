@@ -297,3 +297,22 @@ export function Spinner({ label }: { label?: string }) {
     </div>
   )
 }
+
+
+/** 등급 뱃지 (닉네임 옆 작은 표시) */
+export function LevelBadge({ emoji, name, color, bg, size = 'sm' }: {
+  emoji: string; name: string; color: string; bg: string; size?: 'sm' | 'md'
+}) {
+  const isSm = size === 'sm'
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '3px',
+      fontSize: isSm ? '10.5px' : '12px', fontWeight: 800,
+      color, background: bg,
+      padding: isSm ? '2px 6px' : '3px 9px',
+      borderRadius: 'var(--r-full)', flexShrink: 0, whiteSpace: 'nowrap',
+    }}>
+      <span>{emoji}</span>{name}
+    </span>
+  )
+}
