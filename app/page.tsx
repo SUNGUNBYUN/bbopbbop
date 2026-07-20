@@ -59,25 +59,37 @@ export default function Home() {
   }, [])
 
   function setUserFromSession(u: any) {
-    setUser({
+    const next: User = {
       id: u.id,
       email: u.email ?? '',
       nickname: u.user_metadata?.nickname ?? u.email ?? '',
-    })
+    }
+    // 토큰이 자동 갱신될 때마다 새 객체를 넣으면 타이머·요청이 계속 재시작돼요.
+    // 실제로 값이 바뀐 경우에만 갱신합니다.
+    setUser(prev =>
+      prev && prev.id === next.id && prev.email === next.email && prev.nickname === next.nickname
+        ? prev
+        : next
+    )
   }
 
   // 안 읽은 알림 개수 (로그인 시 + 30초마다)
+  const userId = user?.id ?? null
   useEffect(() => {
-    if (!user) { setUnread(0); setBalance(0); return }
+    if (!userId) { setUnread(0); setBalance(0); return }
     let alive = true
     const check = async () => {
-      const c = await unreadCount(user.id); if (alive) setUnread(c)
-      const b = await getBalance(user.id); if (alive) setBalance(b)
+      try {
+        const c = await unreadCount(userId); if (alive) setUnread(c)
+        const b = await getBalance(userId); if (alive) setBalance(b)
+      } catch {
+        // 네트워크 오류로 폴링이 멈추지 않도록 무시
+      }
     }
     check()
     const timer = setInterval(check, 30000)
     return () => { alive = false; clearInterval(timer) }
-  }, [user, showNotifications])
+  }, [userId, showNotifications])
 
   function showToast(msg: string, emoji?: string) {
     setToast({ msg, emoji })
