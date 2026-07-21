@@ -26,6 +26,7 @@ export type Bounty = {
   location: string | null
   latitude: number | null
   longitude: number | null
+  place_id: string | null
   reward: number
   status: BountyStatus
   winner_user_id: string | null
@@ -95,6 +96,8 @@ export async function createBounty(args: {
   location?: string | null
   lat?: number | null
   lng?: number | null
+  /** 뽑뽑에 등록된 가게라면 그 id (이름만으로 묶지 않기 위해) */
+  placeId?: string | null
   reward: number
   days?: number
 }): Promise<string> {
@@ -105,6 +108,7 @@ export async function createBounty(args: {
     p_location: args.location ?? null,
     p_lat: args.lat ?? null,
     p_lng: args.lng ?? null,
+    p_place_id: args.placeId ?? null,
     p_reward: args.reward,
     p_days: args.days ?? DEFAULT_DAYS,
   })

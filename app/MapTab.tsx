@@ -36,6 +36,7 @@ type MarketPin = {
   location: string | null
   latitude: number | null
   longitude: number | null
+  place_id: string | null
   like_count: number
   view_count: number
 }
@@ -157,34 +158,41 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
         })
       }
 
-      // 카카오에 없는 자체 등록 업체 (제보 기준)
+      // 카카오에 없는 자체 등록 업체
+      // 가게 id가 있으면 그걸 기준으로 묶습니다. 이름 표기가 조금 달라도
+      // 같은 가게면 핀 하나로 합쳐집니다. (id가 없는 옛 글만 이름으로 묶음)
       const kakaoNames = new Set(places.map(p => p.place_name))
       const customPlaces = new Map<string, PlaceWithItems>()
 
+      const groupKey = (row: { place_id?: string | null; place_name?: string | null; location?: string | null }) =>
+        row.place_id ?? row.place_name ?? row.location ?? ''
+
       posts.forEach(p => {
-        const key = p.place_name ?? p.location ?? ''
-        if (!key || kakaoNames.has(key) || !p.latitude || !p.longitude) return
+        const key = groupKey(p)
+        const name = p.place_name ?? p.location ?? ''
+        if (!key || kakaoNames.has(name) || !p.latitude || !p.longitude) return
         if (!customPlaces.has(key)) {
           customPlaces.set(key, {
-            place_name: key, address: p.location ?? '',
+            place_name: name, address: p.location ?? '',
             lat: p.latitude, lng: p.longitude,
-            posts: [], markets: matchMarkets(key), isKakao: false,
+            posts: [], markets: [], isKakao: false,
           })
         }
         customPlaces.get(key)!.posts.push(p)
       })
 
       markets.forEach(m => {
-        const key = m.place_name ?? m.location ?? ''
-        if (!key || kakaoNames.has(key) || !m.latitude || !m.longitude) return
+        const key = groupKey(m)
+        const name = m.place_name ?? m.location ?? ''
+        if (!key || kakaoNames.has(name) || !m.latitude || !m.longitude) return
         if (!customPlaces.has(key)) {
           customPlaces.set(key, {
-            place_name: key, address: m.location ?? '',
+            place_name: name, address: m.location ?? '',
             lat: m.latitude, lng: m.longitude,
             posts: [], markets: [], isKakao: false,
           })
-          customPlaces.get(key)!.markets.push(m)
-        } else if (!customPlaces.get(key)!.markets.some(x => x.id === m.id)) {
+        }
+        if (!customPlaces.get(key)!.markets.some(x => x.id === m.id)) {
           customPlaces.get(key)!.markets.push(m)
         }
       })

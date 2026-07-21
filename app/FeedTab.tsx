@@ -401,6 +401,8 @@ function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing
   const [placeAddr, setPlaceAddr] = useState(editing?.location ?? '')
   const [placeLat, setPlaceLat] = useState<number | null>(editing?.latitude ?? null)
   const [placeLng, setPlaceLng] = useState<number | null>(editing?.longitude ?? null)
+  // 뽑뽑에 등록된 가게를 고른 경우 그 가게와 직접 연결 (이름만으로 묶지 않기 위해)
+  const [placeId, setPlaceId] = useState<string | null>(null)
   const [showPlaceSearch, setShowPlaceSearch] = useState(false)
 
   const totalPhotos = keptUrls.length + images.length
@@ -410,6 +412,7 @@ function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing
     setPlaceAddr(place.road_address_name || place.address_name)
     setPlaceLat(parseFloat(place.y))
     setPlaceLng(parseFloat(place.x))
+    setPlaceId(place.place_id ?? null)
     setShowPlaceSearch(false)
   }
 
@@ -434,6 +437,7 @@ function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing
       image_url: allUrls[0] ?? null,
       images: allUrls,
       place_name: placeName || null,
+      place_id: placeId,
       location: placeAddr || null,
       latitude: placeLat,
       longitude: placeLng,
@@ -511,7 +515,7 @@ function FeedForm({ user, editing, onClose, onSubmitted }: { user: User; editing
             <div style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)', position: 'relative' }}>
               <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px', paddingRight: '32px' }}>📍 {placeName}</p>
               {placeAddr && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{placeAddr}</p>}
-              <button onClick={() => { setPlaceName(''); setPlaceAddr(''); setPlaceLat(null); setPlaceLng(null) }} style={{ position: 'absolute', top: '12px', right: '12px', width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(255,255,255,0.8)', color: 'var(--ink-3)', fontSize: '13px', border: 'none', cursor: 'pointer' }}>✕</button>
+              <button onClick={() => { setPlaceName(''); setPlaceAddr(''); setPlaceLat(null); setPlaceLng(null); setPlaceId(null) }} style={{ position: 'absolute', top: '12px', right: '12px', width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(255,255,255,0.8)', color: 'var(--ink-3)', fontSize: '13px', border: 'none', cursor: 'pointer' }}>✕</button>
             </div>
           ) : (
             <button onClick={() => setShowPlaceSearch(true)} className="pressable" style={{ width: '100%', padding: '14px 15px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', fontSize: '15px', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', color: 'var(--ink-4)', display: 'flex', alignItems: 'center', gap: '8px' }}>🔍 뽑은 장소 검색하기 (선택)</button>
