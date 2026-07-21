@@ -58,10 +58,21 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
     setLocationKakaoId(place.kakao_id ?? null)
     setShowMapSearch(false)
     setErrors(p => ({ ...p, location: undefined }))
+    setCategoryWarn(!looksLikeClawMachine(place.category_name))
+
+    // 이미 뽑뽑에 등록된 가게를 고른 경우 → 어느 가게인지 확정이므로
+    // 중복 확인을 다시 물어보지 않고 바로 연결합니다.
+    if (place.place_id) {
+      setExistingPlaceId(place.place_id)
+      setDupCandidates([])
+      const prods = await placeProducts(place.place_id)
+      setExistingProducts(prods)
+      return
+    }
+
     setExistingPlaceId(null)
     setExistingProducts([])
-    setCategoryWarn(!looksLikeClawMachine(place.category_name))
-    // 중복 후보 조회 (이름도 넘겨서 "○○점" 같은 변형까지 잡음)
+    // 카카오에서 고른 경우에만 비슷한 가게가 있는지 확인
     const near = await findNearbyPlaces(lat, lng, place.kakao_id, place.place_name)
     setDupCandidates(near)
   }
@@ -323,8 +334,8 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
         {/* 중복 후보: "혹시 이 가게 아닌가요?" */}
         {dupCandidates.length > 0 && !existingPlaceId && (
           <div style={{ padding: '14px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--coral)', background: 'var(--coral-soft)' }}>
-            <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }}>🤔 이미 등록된 가게예요</p>
-            <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 10px' }}>같은 가게면 선택하세요. 이 가게에 상품 제보를 추가해요(+20P). 다른 가게면 새로 등록하세요.</p>
+            <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }}>🤔 혹시 이 가게인가요?</p>
+            <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: '0 0 10px' }}>비슷한 이름의 가게가 근처에 있어요. 같은 곳이면 선택해주세요. <b>다른 가게라면 아래에서 새로 등록</b>하시면 돼요.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {dupCandidates.map(c => (
                 <button key={c.id} onClick={() => chooseExisting(c.id)} className="pressable"
@@ -341,7 +352,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
         )}
         {existingPlaceId && (
           <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--mint-soft, var(--coral-soft))', fontSize: '13px', color: 'var(--coral)', fontWeight: 600 }}>
-            ✓ 이 가게에 상품을 추가해요. 다시 고르려면 위치를 다시 선택하세요.
+            ✓ <b>이미 등록된 가게</b>예요. 여기에 제보를 추가해요. 다른 가게면 위치를 다시 선택하세요.
           </div>
         )}
         {existingPlaceId && existingProducts.length > 0 && (

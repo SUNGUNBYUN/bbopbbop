@@ -65,7 +65,7 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
   async function searchOurPlaces(q: string): Promise<Place[]> {
     const { data } = await supabase
       .from('places')
-      .select('place_name, address, latitude, longitude')
+      .select('id, place_name, address, latitude, longitude')
       .ilike('place_name', `%${q}%`)
       .limit(15)
     if (!data) return []
@@ -76,6 +76,7 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
       x: String(p.longitude),
       y: String(p.latitude),
       is_ours: true,
+      place_id: p.id,
     }))
   }
 
