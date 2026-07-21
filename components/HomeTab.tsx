@@ -36,8 +36,14 @@ export function HomeTab({ posts, loading, onSelectPost, onNewPost, onOpenBounty,
   }, [posts])
 
   const filtered = useMemo(() => {
-    let list = posts.filter(p =>
-      p.title.includes(search) || (p.location ?? '').includes(search)
+    // 제목·장소뿐 아니라 기계에 든 인형 목록과 태그까지 검색
+    const q = search.trim()
+    let list = q === '' ? posts : posts.filter(p =>
+      p.title.includes(q)
+      || (p.location ?? '').includes(q)
+      || (p.place_name ?? '').includes(q)
+      || (p.tags ?? '').includes(q)
+      || (p.products ?? []).some(x => x.includes(q))
     )
     if (activeTag) list = list.filter(p => (p.tags ?? '').includes(activeTag))
     if (sort === 'popular') list = [...list].sort((a, b) => (b.like_count ?? 0) - (a.like_count ?? 0))

@@ -19,7 +19,13 @@ type Errors = { image?: string; title?: string; location?: string }
 
 export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
   const isEdit = !!editing
-  const [title, setTitle] = useState(editing?.title ?? '')
+  // 기계 1대에 여러 인형이 들어있으므로 목록으로 관리
+  const [products, setProducts] = useState<string[]>(
+    editing?.products && editing.products.length > 0
+      ? editing.products
+      : (editing?.title ? [editing.title] : [])
+  )
+  const [productInput, setProductInput] = useState('')
   const [location, setLocation] = useState(editing?.place_name || editing?.location || '')
   const [locationDetail, setLocationDetail] = useState(editing?.location ?? '')
   const [locationLat, setLocationLat] = useState<number | null>(editing?.latitude ?? null)
@@ -73,10 +79,36 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
 
   const totalPhotos = keptUrls.length + images.length
 
+  /** 인형 목록 → 대표 제목 ("짱구 외 4종") */
+  const title = products.length === 0
+    ? ''
+    : products.length === 1
+      ? products[0]
+      : `${products[0]} 외 ${products.length - 1}종`
+
+  function addProduct(raw?: string) {
+    const v = (raw ?? productInput).trim()
+    if (!v) return
+    // 쉼표로 여러 개 붙여넣기도 지원
+    const parts = v.split(/[,、]/).map(x => x.trim()).filter(Boolean)
+    const next = [...products]
+    for (const p of parts) {
+      const dup = next.some(x => x.replace(/\s/g, '') === p.replace(/\s/g, ''))
+      if (!dup && next.length < 20) next.push(p)
+    }
+    setProducts(next)
+    setProductInput('')
+    setErrors(e => ({ ...e, title: undefined }))
+  }
+
+  function removeProduct(i: number) {
+    setProducts(products.filter((_, idx) => idx !== i))
+  }
+
   function validate() {
     const e: Errors = {}
     if (totalPhotos === 0) e.image = '사진을 추가해주세요'
-    if (!title.trim()) e.title = '뭐가 있는지 알려주세요'
+    if (products.length === 0) e.title = '어떤 인형이 있는지 하나 이상 적어주세요'
     if (!location.trim()) e.location = '업체 위치를 입력해주세요'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -107,7 +139,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
     // ── 수정 모드: 내용만 갱신 (포인트/중복 판정 없음) ──
     if (isEdit && editing) {
       const { error: upErr } = await supabase.from('posts').update({
-        title, location: fullLocation, tags,
+        title, products, location: fullLocation, tags,
         image_url: urls[0] ?? null,
         images: urls,
         latitude: locationLat, longitude: locationLng, place_name: locationPlaceName,
@@ -133,7 +165,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
     }
 
     const { data: post, error } = await supabase.from('posts').insert({
-      title, location: fullLocation, tags,
+      title, products, location: fullLocation, tags,
       image_url: urls[0] ?? null,
       images: urls,
       user_id: user.id, nickname: user.nickname,
@@ -202,13 +234,61 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
           <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: '8px 0 0' }}>첫 번째 사진이 대표로 보여요. 최대 5장.</p>
         </Field>
 
-        <Field label="뭐가 있어요?" required error={errors.title}>
-          <Input
-            placeholder="예) 피카츄 인형, 산리오 가챠"
-            value={title}
-            error={!!errors.title}
-            onChange={(e) => { setTitle(e.target.value); setErrors(p => ({ ...p, title: undefined })) }}
-          />
+        <Field label="이 기계에 뭐가 있어요?" required error={errors.title}>
+          {/* 기계 한 대에 여러 종류가 섞여 있는 경우가 많아 목록으로 받습니다 */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Input
+              placeholder="예) 짱구, 헬로키티"
+              value={productInput}
+              error={!!errors.title}
+              onChange={(e) => setProductInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); addProduct() }
+              }}
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => addProduct()}
+              disabled={!productInput.trim()}
+              className="pressable"
+              style={{
+                flexShrink: 0, padding: '0 18px', borderRadius: 'var(--r-md)',
+                border: 'none', background: productInput.trim() ? 'var(--coral)' : 'var(--surface-3)',
+                color: productInput.trim() ? '#fff' : 'var(--ink-4)',
+                fontSize: '14px', fontWeight: 700, cursor: productInput.trim() ? 'pointer' : 'default',
+              }}
+            >추가</button>
+          </div>
+
+          {products.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginTop: '10px' }}>
+              {products.map((p, i) => (
+                <span
+                  key={p + i}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    padding: '7px 10px 7px 12px', borderRadius: 'var(--r-full)',
+                    background: 'var(--coral-soft)', color: 'var(--coral)',
+                    fontSize: '13px', fontWeight: 700,
+                  }}
+                >
+                  {p}
+                  <button
+                    type="button"
+                    onClick={() => removeProduct(i)}
+                    style={{ background: 'none', border: 'none', color: 'var(--coral)', fontSize: '13px', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                    aria-label={`${p} 빼기`}
+                  >✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: '9px 0 0', lineHeight: 1.55 }}>
+            한 기계에 여러 종류가 있으면 모두 적어주세요. 쉼표로 한 번에 넣어도 돼요.<br />
+            {products.length > 0 && <span style={{ color: 'var(--ink-3)' }}>제목은 <b>{title}</b> 으로 올라가요.</span>}
+          </p>
         </Field>
 
         <Field label="업체 위치" required error={errors.location}>
@@ -277,7 +357,9 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
                   <div style={{ width: '84px', height: '84px', borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--line)' }}>
                     {p.image_url ? <img src={p.image_url} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '28px' }}>🧸</span>}
                   </div>
-                  <p style={{ fontSize: '11.5px', color: 'var(--ink-3)', margin: '5px 0 0', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</p>
+                  <p style={{ fontSize: '11.5px', color: 'var(--ink-3)', margin: '5px 0 0', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {p.products && p.products.length > 0 ? p.products.join(', ') : p.title}
+                  </p>
                 </div>
               ))}
             </div>

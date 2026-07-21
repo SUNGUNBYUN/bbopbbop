@@ -176,11 +176,12 @@ export async function awardProductReport(postId: string, placeId: string, title:
   return result
 }
 
-export type SimilarProduct = { id: string; title: string; image_url: string | null; created_at: string }
+export type SimilarProduct = { id: string; title: string; image_url: string | null; products: string[] | null; created_at: string }
 
-/** 입력한 상품명과 비슷한 기존 상품(사진 포함) — 유저 판단용 팝업에 사용 */
-export async function similarProducts(placeId: string, title: string): Promise<SimilarProduct[]> {
-  const { data, error } = await supabase.rpc('similar_products', { p_place_id: placeId, p_title: title })
+/** 내가 적은 인형과 겹치는 기존 제보 — 중복 안내용 */
+export async function similarProducts(placeId: string, names: string[]): Promise<SimilarProduct[]> {
+  if (names.length === 0) return []
+  const { data, error } = await supabase.rpc('similar_products', { p_place_id: placeId, p_names: names })
   if (error) { console.error('similarProducts', error); return [] }
   return (data as SimilarProduct[]) ?? []
 }
@@ -197,7 +198,7 @@ export async function verifyPost(postId: string): Promise<VerifyResult | null> {
 }
 
 
-export type PlaceProduct = { id: string; title: string; image_url: string | null; created_at: string }
+export type PlaceProduct = { id: string; title: string; image_url: string | null; products: string[] | null; created_at: string }
 
 /** 가게의 기존 상품 목록(등록 전 유저에게 보여줌) */
 export async function placeProducts(placeId: string): Promise<PlaceProduct[]> {

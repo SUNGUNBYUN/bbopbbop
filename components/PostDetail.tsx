@@ -195,6 +195,17 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
           {/* 제목 + 태그 */}
           <div>
             <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--ink)', margin: '0 0 8px', lineHeight: 1.3 }}>{post.title}</h1>
+            {post.products && post.products.length > 1 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '0 0 8px' }}>
+                {post.products.map((p, i) => (
+                  <span key={p + i} style={{
+                    padding: '5px 11px', borderRadius: 'var(--r-full)',
+                    background: 'var(--surface-2)', color: 'var(--ink-2)',
+                    fontSize: '12.5px', fontWeight: 700,
+                  }}>🧸 {p}</span>
+                ))}
+              </div>
+            )}
             {post.tags && <p style={{ fontSize: '13px', color: 'var(--coral)', margin: 0, fontWeight: 600 }}>{post.tags}</p>}
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '12px' }}>
               <Stat icon="👁" value={viewCount} />

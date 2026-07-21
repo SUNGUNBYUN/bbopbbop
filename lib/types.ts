@@ -9,6 +9,8 @@ export type User = {
 export type Post = {
   id: string
   title: string
+  /** 이 기계에 들어있는 인형 목록 (기계 1대 = 제보 1개) */
+  products: string[] | null
   location: string | null
   tags: string | null
   image_url: string | null

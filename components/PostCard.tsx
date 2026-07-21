@@ -32,6 +32,16 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
             lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           }}>{post.title}</p>
 
+          {/* 이 기계에 든 인형들 */}
+          {post.products && post.products.length > 1 && (
+            <p style={{
+              fontSize: '11.5px', color: 'var(--ink-3)', margin: '0 0 4px',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              🧸 {post.products.join(' · ')}
+            </p>
+          )}
+
           {(post.place_name || post.location) && (
             <div style={{ margin: '0 0 3px' }}>
               {/* 가게명 (굵게) + 주소 (아래 작게) */}
