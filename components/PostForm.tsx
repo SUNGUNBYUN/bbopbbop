@@ -89,14 +89,11 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
   function addProduct(raw?: string) {
     const v = (raw ?? productInput).trim()
     if (!v) return
-    // 쉼표로 여러 개 붙여넣기도 지원
-    const parts = v.split(/[,、]/).map(x => x.trim()).filter(Boolean)
-    const next = [...products]
-    for (const p of parts) {
-      const dup = next.some(x => x.replace(/\s/g, '') === p.replace(/\s/g, ''))
-      if (!dup && next.length < 20) next.push(p)
-    }
-    setProducts(next)
+    // 상품명 안에 쉼표가 들어가는 경우가 있어(예: "목걸이 (핑크, 화이트)")
+    // 자동으로 나누지 않고 입력한 그대로 하나로 추가합니다.
+    const dup = products.some(x => x.replace(/\s/g, '') === v.replace(/\s/g, ''))
+    if (dup || products.length >= 20) { setProductInput(''); return }
+    setProducts([...products, v])
     setProductInput('')
     setErrors(e => ({ ...e, title: undefined }))
   }
@@ -238,7 +235,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
           {/* 기계 한 대에 여러 종류가 섞여 있는 경우가 많아 목록으로 받습니다 */}
           <div style={{ display: 'flex', gap: '8px' }}>
             <Input
-              placeholder="예) 짱구, 헬로키티"
+              placeholder="예) 노블래빗 진주 목걸이 (핑크, 화이트)"
               value={productInput}
               error={!!errors.title}
               onChange={(e) => setProductInput(e.target.value)}
@@ -286,7 +283,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
           )}
 
           <p style={{ fontSize: '12px', color: 'var(--ink-4)', margin: '9px 0 0', lineHeight: 1.55 }}>
-            한 기계에 여러 종류가 있으면 모두 적어주세요. 쉼표로 한 번에 넣어도 돼요.<br />
+            한 기계에 여러 종류가 있으면 <b>하나씩</b> 추가해주세요. 입력 후 Enter 또는 추가 버튼.<br />
             {products.length > 0 && <span style={{ color: 'var(--ink-3)' }}>제목은 <b>{title}</b> 으로 올라가요.</span>}
           </p>
         </Field>
