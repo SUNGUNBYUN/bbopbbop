@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getOrCreatePlace, awardProductReport, findNearbyPlaces, placeProducts, looksLikeClawMachine, NearbyPlace, PlaceProduct, POINTS } from '@/lib/points'
 import { User, Place, Post } from '@/lib/types'
+import { timeAgo } from '@/lib/utils'
 import { Header, BackButton, Button, Input, Field } from './ui'
 import { MultiImageUploader, ImageSlot, uploadImages } from './MultiImageUploader'
 import { PlaceSearchSheet } from './PlaceSearchSheet'
@@ -46,6 +47,8 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
   const [categoryWarn, setCategoryWarn] = useState(false)
   const [existingProducts, setExistingProducts] = useState<PlaceProduct[]>([])
   const [isDifferent, setIsDifferent] = useState(false)
+  // 기존 제보 사진 확대 보기 (같은 상품인지 비교하려면 크게 봐야 함)
+  const [zoomImage, setZoomImage] = useState<{ url: string; label: string } | null>(null)
 
   async function handlePlaceSelect(place: Place) {
     const lat = parseFloat(place.y)
@@ -358,18 +361,46 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
         {existingPlaceId && existingProducts.length > 0 && (
           <div style={{ padding: '14px', borderRadius: 'var(--r-md)', background: 'var(--surface-2)' }}>
             <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-2)', margin: '0 0 4px' }}>이 가게에 이미 제보된 상품 ({existingProducts.length})</p>
-            <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: '0 0 10px' }}>사진을 보고 내가 올리려는 상품과 같은지 확인하세요. 같으면 포인트가 없어요.</p>
-            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }} className="no-scrollbar">
-              {existingProducts.map(p => (
-                <div key={p.id} style={{ flexShrink: 0, width: '84px' }}>
-                  <div style={{ width: '84px', height: '84px', borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--line)' }}>
-                    {p.image_url ? <img src={p.image_url} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '28px' }}>🧸</span>}
+            <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: '0 0 10px' }}>사진을 눌러 크게 보고, 내가 올리려는 것과 같은지 확인하세요. 같으면 포인트가 없어요.</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {existingProducts.map(p => {
+                const names = p.products && p.products.length > 0 ? p.products : [p.title]
+                return (
+                  <div key={p.id} style={{ display: 'flex', gap: '12px', padding: '10px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                    <button
+                      type="button"
+                      onClick={() => p.image_url && setZoomImage({ url: p.image_url, label: names.join(', ') })}
+                      style={{
+                        flexShrink: 0, width: '110px', height: '110px', padding: 0,
+                        borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface-2)',
+                        border: 'none', cursor: p.image_url ? 'zoom-in' : 'default',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative',
+                      }}
+                    >
+                      {p.image_url
+                        ? <>
+                            <img src={p.image_url} alt={names.join(', ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <span style={{ position: 'absolute', right: '4px', bottom: '4px', background: 'rgba(26,21,35,0.6)', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--r-full)' }}>🔍 크게</span>
+                          </>
+                        : <span style={{ fontSize: '34px' }}>🧸</span>}
+                    </button>
+
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '6px' }}>
+                        {names.map((n, i) => (
+                          <span key={n + i} style={{
+                            padding: '4px 9px', borderRadius: 'var(--r-full)',
+                            background: 'var(--surface-2)', color: 'var(--ink-2)',
+                            fontSize: '12px', fontWeight: 700,
+                          }}>🧸 {n}</span>
+                        ))}
+                      </div>
+                      <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0 }}>{timeAgo(p.created_at)}</p>
+                    </div>
                   </div>
-                  <p style={{ fontSize: '11.5px', color: 'var(--ink-3)', margin: '5px 0 0', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {p.products && p.products.length > 0 ? p.products.join(', ') : p.title}
-                  </p>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', cursor: 'pointer' }}>
               <input type="checkbox" checked={isDifferent} onChange={(e) => setIsDifferent(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: 'var(--coral)' }} />
@@ -382,6 +413,30 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
           <Input placeholder="#피카츄 #포켓몬" value={tags} onChange={(e) => setTags(e.target.value)} />
         </Field>
       </main>
+
+      {/* 사진 확대 보기 */}
+      {zoomImage && (
+        <div
+          onClick={() => setZoomImage(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.92)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '20px', cursor: 'zoom-out',
+          }}
+        >
+          <img
+            src={zoomImage.url}
+            alt={zoomImage.label}
+            style={{ maxWidth: '100%', maxHeight: '78vh', objectFit: 'contain', borderRadius: 'var(--r-md)' }}
+          />
+          <p style={{ color: '#fff', fontSize: '15px', fontWeight: 700, margin: '18px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
+            🧸 {zoomImage.label}
+          </p>
+          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '12.5px', margin: '10px 0 0' }}>
+            아무 곳이나 눌러 닫기
+          </p>
+        </div>
+      )}
 
       {showMapSearch && (
         <PlaceSearchSheet
