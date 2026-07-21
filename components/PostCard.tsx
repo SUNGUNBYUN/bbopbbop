@@ -33,17 +33,31 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
           }}>{post.title}</p>
 
           {(post.place_name || post.location) && (
-            <p style={{
-              fontSize: '12.5px', color: 'var(--ink-3)', margin: '0 0 3px',
-              display: 'flex', alignItems: 'center', gap: '3px',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              <span style={{ flexShrink: 0 }}>📍</span>
-              {/* 가게명을 우선 표시. 없으면 주소로 대체 */}
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: post.place_name ? 700 : 400, color: post.place_name ? 'var(--ink-2)' : 'var(--ink-3)' }}>
-                {post.place_name || post.location}
-              </span>
-            </p>
+            <div style={{ margin: '0 0 3px' }}>
+              {/* 가게명 (굵게) + 주소 (아래 작게) */}
+              <p style={{
+                fontSize: '12.5px', margin: 0,
+                display: 'flex', alignItems: 'center', gap: '3px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                <span style={{ flexShrink: 0 }}>📍</span>
+                <span style={{
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                  fontWeight: post.place_name ? 700 : 400,
+                  color: post.place_name ? 'var(--ink-2)' : 'var(--ink-3)',
+                }}>
+                  {post.place_name || post.location}
+                </span>
+              </p>
+              {post.place_name && post.location && post.location !== post.place_name && (
+                <p style={{
+                  fontSize: '11.5px', color: 'var(--ink-4)', margin: '1px 0 0', paddingLeft: '17px',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {post.location}
+                </p>
+              )}
+            </div>
           )}
 
           {post.tags && (

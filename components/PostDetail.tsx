@@ -10,6 +10,7 @@ import { ReportSheet } from './ReportSheet'
 import { ImageGallery } from './ImageGallery'
 import { PlaceMapView } from './PlaceMapView'
 import { POINTS } from '@/lib/points'
+import { PlaceLocationEditor } from './PlaceLocationEditor'
 
 type Props = {
   post: Post
@@ -35,6 +36,7 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
   const [verifyCount, setVerifyCount] = useState(post.verify_count ?? 0)
   const [verifying, setVerifying] = useState(false)
   const [showMap, setShowMap] = useState(false)
+  const [showLocEdit, setShowLocEdit] = useState(false)
 
   const isMine = user?.id === post.user_id
 
@@ -213,24 +215,49 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
             )}
           </div>
 
-          {/* 위치 */}
-          {post.location && (
-            post.latitude != null && post.longitude != null ? (
-              <button
-                onClick={() => setShowMap(true)}
-                className="pressable"
-                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
-              >
-                <span style={{ fontSize: '20px' }}>📍</span>
-                <p style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ink)', margin: 0, flex: 1 }}>{post.location}</p>
-                <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--coral)', flexShrink: 0 }}>지도 보기 ›</span>
-              </button>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)' }}>
-                <span style={{ fontSize: '20px' }}>📍</span>
-                <p style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ink)', margin: 0, flex: 1 }}>{post.location}</p>
-              </div>
-            )
+          {/* 위치 — 가게명(굵게) + 주소(작게) */}
+          {(post.place_name || post.location) && (
+            <div>
+              {post.latitude != null && post.longitude != null ? (
+                <button
+                  onClick={() => setShowMap(true)}
+                  className="pressable"
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '20px', flexShrink: 0 }}>📍</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
+                      {post.place_name || post.location}
+                    </p>
+                    {post.place_name && post.location && post.location !== post.place_name && (
+                      <p style={{ fontSize: '12.5px', color: 'var(--ink-4)', margin: '2px 0 0' }}>{post.location}</p>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--coral)', flexShrink: 0 }}>지도 보기 ›</span>
+                </button>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-sm)' }}>
+                  <span style={{ fontSize: '20px', flexShrink: 0 }}>📍</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
+                      {post.place_name || post.location}
+                    </p>
+                    {post.place_name && post.location && post.location !== post.place_name && (
+                      <p style={{ fontSize: '12.5px', color: 'var(--ink-4)', margin: '2px 0 0' }}>{post.location}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isMine && post.place_id && post.latitude != null && post.longitude != null && (
+                <button
+                  onClick={() => setShowLocEdit(true)}
+                  style={{ background: 'none', border: 'none', padding: '7px 2px 0', cursor: 'pointer', fontSize: '12px', color: 'var(--ink-4)', fontWeight: 600, textDecoration: 'underline' }}
+                >
+                  📍 위치가 실제와 달라요 (수정)
+                </button>
+              )}
+            </div>
           )}
 
           {/* 포인트 확정 상태 (내 제보일 때만) */}
@@ -355,6 +382,19 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
           lat={post.latitude}
           lng={post.longitude}
           onClose={() => setShowMap(false)}
+        />
+      )}
+
+      {showLocEdit && post.place_id && post.latitude != null && post.longitude != null && (
+        <PlaceLocationEditor
+          placeId={post.place_id}
+          placeName={post.place_name || post.location || '이 가게'}
+          address={post.location}
+          lat={post.latitude}
+          lng={post.longitude}
+          onClose={() => setShowLocEdit(false)}
+          onSaved={() => { setShowLocEdit(false); onBack() }}
+          onToast={(m, e) => alert(m)}
         />
       )}
     </div>
