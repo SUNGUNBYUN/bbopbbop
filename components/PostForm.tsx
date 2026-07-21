@@ -25,6 +25,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
   const [locationLat, setLocationLat] = useState<number | null>(editing?.latitude ?? null)
   const [locationLng, setLocationLng] = useState<number | null>(editing?.longitude ?? null)
   const [locationPlaceName, setLocationPlaceName] = useState(editing?.place_name ?? '')
+  const [locationKakaoId, setLocationKakaoId] = useState<string | null>(null)
   const [tags, setTags] = useState(editing?.tags ?? '')
   // 수정 시 기존 사진(URL) / 새로 추가한 사진(File) 분리 관리
   const [keptUrls, setKeptUrls] = useState<string[]>(
@@ -48,13 +49,14 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
     setLocationLat(lat)
     setLocationLng(lng)
     setLocationPlaceName(place.place_name)
+    setLocationKakaoId(place.kakao_id ?? null)
     setShowMapSearch(false)
     setErrors(p => ({ ...p, location: undefined }))
     setExistingPlaceId(null)
     setExistingProducts([])
     setCategoryWarn(!looksLikeClawMachine(place.category_name))
-    // 중복 후보 조회
-    const near = await findNearbyPlaces(lat, lng)
+    // 중복 후보 조회 (이름도 넘겨서 "○○점" 같은 변형까지 잡음)
+    const near = await findNearbyPlaces(lat, lng, place.kakao_id, place.place_name)
     setDupCandidates(near)
   }
 
@@ -121,8 +123,10 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
     if (locationLat != null && locationLng != null) {
       const pr = await getOrCreatePlace({
         placeName: locationPlaceName || location,
-        address: fullLocation,
+        // 주소만 저장 (가게명이 앞에 붙으면 같은 가게를 다르게 인식함)
+        address: locationDetail || location,
         lat: locationLat, lng: locationLng,
+        kakaoId: locationKakaoId,
         existingPlaceId: existingPlaceId,
       })
       if (pr) { placeId = pr.place_id; earned += pr.place_reward ?? 0 }
@@ -213,7 +217,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
               <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 3px', paddingRight: '32px' }}>{location}</p>
               {locationDetail && <p style={{ fontSize: '12.5px', color: 'var(--ink-3)', margin: 0 }}>{locationDetail}</p>}
               <button
-                onClick={() => { setLocation(''); setLocationDetail(''); setLocationLat(null); setLocationLng(null); setLocationPlaceName('') }}
+                onClick={() => { setLocation(''); setLocationDetail(''); setLocationLat(null); setLocationLng(null); setLocationPlaceName(''); setLocationKakaoId(null) }}
                 style={{ position: 'absolute', top: '12px', right: '12px', width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(255,255,255,0.8)', color: 'var(--ink-3)', fontSize: '13px', border: 'none', cursor: 'pointer' }}
               >✕</button>
             </div>

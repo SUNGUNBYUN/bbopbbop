@@ -100,6 +100,7 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
             y: p.y,
             category_name: p.category_name,
             category_group_code: p.category_group_code,
+            kakao_id: p.id ? String(p.id) : undefined,
           })))
         } else {
           resolve([])

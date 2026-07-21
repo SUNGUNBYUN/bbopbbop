@@ -5,7 +5,7 @@ import { Post, User } from '@/lib/types'
 import { Logo } from '@/components/Logo'
 import { IconButton, Toast } from '@/components/ui'
 import { unreadCount } from '@/lib/social'
-import { getBalance } from '@/lib/points'
+import { getBalance, POINTS_CHANGED_EVENT } from '@/lib/points'
 import { startOrGetChat } from '@/lib/chat'
 import { NotificationList } from '@/components/NotificationList'
 import { Onboarding } from '@/components/Onboarding'
@@ -95,6 +95,16 @@ export default function Home() {
     const timer = setInterval(check, 30000)
     return () => { alive = false; clearInterval(timer) }
   }, [userId, showNotifications])
+
+  // 포인트가 바뀌면(적립·사용) 헤더 잔액을 바로 갱신
+  useEffect(() => {
+    if (!userId) return
+    const onChanged = async () => {
+      try { setBalance(await getBalance(userId)) } catch { /* 무시 */ }
+    }
+    window.addEventListener(POINTS_CHANGED_EVENT, onChanged)
+    return () => window.removeEventListener(POINTS_CHANGED_EVENT, onChanged)
+  }, [userId])
 
   function showToast(msg: string, emoji?: string) {
     setToast({ msg, emoji })

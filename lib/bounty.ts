@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { notifyPointsChanged } from './points'
 
 /* ============================================
    제보 현상금
@@ -108,6 +109,7 @@ export async function createBounty(args: {
     p_days: args.days ?? DEFAULT_DAYS,
   })
   if (error) throw new Error(error.message || '현상금 등록에 실패했어요')
+  notifyPointsChanged()
   return data as string
 }
 
@@ -129,6 +131,7 @@ export async function resolveBounty(bountyId: string, answerId: string): Promise
     p_answer_id: answerId,
   })
   if (error) throw new Error(error.message || '채택에 실패했어요')
+  notifyPointsChanged()
   return (data as number) ?? 0
 }
 
@@ -136,6 +139,7 @@ export async function resolveBounty(bountyId: string, answerId: string): Promise
 export async function cancelBounty(bountyId: string): Promise<number> {
   const { data, error } = await supabase.rpc('cancel_bounty', { p_bounty_id: bountyId })
   if (error) throw new Error(error.message || '취소에 실패했어요')
+  notifyPointsChanged()
   return (data as number) ?? 0
 }
 

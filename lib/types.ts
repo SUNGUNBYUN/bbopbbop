@@ -46,6 +46,8 @@ export type Place = {
   y: string
   category_name?: string
   category_group_code?: string
+  /** 카카오 장소 고유 ID — 같은 가게인지 판별하는 가장 확실한 키 */
+  kakao_id?: string
   /** 뽑뽑에 직접 등록된 업체(카카오 검색에 없는 곳) */
   is_ours?: boolean
 }

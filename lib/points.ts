@@ -36,6 +36,19 @@ export const POINT_VALUES: Record<AwardReason, number> = {
   feed: POINTS.feed,
 }
 
+/**
+ * 포인트가 변했다고 앱에 알림.
+ * 헤더 잔액처럼 여러 화면에서 보고 있는 값을 즉시 갱신하기 위한 신호.
+ * 포인트를 바꾸는 함수들이 스스로 호출하므로 호출부에서 신경 쓸 필요가 없어요.
+ */
+export const POINTS_CHANGED_EVENT = 'bbop:points-changed'
+
+export function notifyPointsChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(POINTS_CHANGED_EVENT))
+  }
+}
+
 /** 내 포인트 잔액 */
 export async function getBalance(userId: string): Promise<number> {
   const { data } = await supabase.from('profiles').select('point_balance').eq('id', userId).single()
@@ -53,7 +66,9 @@ export async function awardPoints(reason: AwardReason, refType?: string, refId?:
     p_ref_id: refId ?? null,
   })
   if (error) { console.error('awardPoints', error); return 0 }
-  return (data as number) ?? 0
+  const amount = (data as number) ?? 0
+  if (amount > 0) notifyPointsChanged()
+  return amount
 }
 
 /**
@@ -66,6 +81,7 @@ export async function bumpMarketItem(itemId: string, cost: number): Promise<stri
     p_cost: cost,
   })
   if (error) throw new Error(error.message || '끌어올리기에 실패했어요')
+  notifyPointsChanged()
   return data as string
 }
 
@@ -113,9 +129,9 @@ export type NearbyPlace = {
 }
 
 /** 등록 전 근처 중복 후보 조회 (반경 ~50m + kakao_place_id) */
-export async function findNearbyPlaces(lat: number, lng: number, kakaoId?: string): Promise<NearbyPlace[]> {
+export async function findNearbyPlaces(lat: number, lng: number, kakaoId?: string, name?: string): Promise<NearbyPlace[]> {
   const { data, error } = await supabase.rpc('find_nearby_places', {
-    p_lat: lat, p_lng: lng, p_kakao_id: kakaoId ?? null,
+    p_lat: lat, p_lng: lng, p_kakao_id: kakaoId ?? null, p_name: name ?? null,
   })
   if (error) { console.error('findNearbyPlaces', error); return [] }
   return (data as NearbyPlace[]) ?? []
@@ -125,7 +141,7 @@ export type PlaceResult = { place_id: string; place_reward: number; is_new_place
 
 /**
  * 가게 확보(get-or-create). existingPlaceId를 주면 그 가게 사용(상품 추가),
- * 없으면 신규 가게 생성 + 즉시 10P(가게 확정 90P는 재인증 시).
+ * 없으면 신규 가게 생성 + 즉시 20P(가게 확정 80P는 확인 시).
  */
 export async function getOrCreatePlace(args: {
   placeName: string; address?: string | null; lat: number; lng: number
@@ -139,21 +155,25 @@ export async function getOrCreatePlace(args: {
     p_existing_place_id: args.existingPlaceId ?? null,
   })
   if (error) { console.error('getOrCreatePlace', error); return null }
-  return data as PlaceResult
+  const result = data as PlaceResult
+  if (result?.place_reward > 0) notifyPointsChanged()
+  return result
 }
 
 export type ProductResult = { post_reward: number; is_dup: boolean }
 
 /**
  * 상품 제보 보상. posts insert 후 호출.
- * 같은 가게+같은 상품이 7일 이내면 중복(0P), 아니면 20P.
+ * 같은 가게+같은 상품이 7일 이내면 중복(0P), 아니면 즉시 10P(확정 40P는 확인 시).
  */
 export async function awardProductReport(postId: string, placeId: string, title: string, force = false): Promise<ProductResult | null> {
   const { data, error } = await supabase.rpc('award_product_report', {
     p_post_id: postId, p_place_id: placeId, p_title: title, p_force: force,
   })
   if (error) { console.error('awardProductReport', error); return null }
-  return data as ProductResult
+  const result = data as ProductResult
+  if (result?.post_reward > 0) notifyPointsChanged()
+  return result
 }
 
 export type SimilarProduct = { id: string; title: string; image_url: string | null; created_at: string }
@@ -167,11 +187,13 @@ export async function similarProducts(placeId: string, title: string): Promise<S
 
 export type VerifyResult = { my_reward: number; owner_confirmed: number; place_confirmed?: number; verify_count?: number; already?: boolean }
 
-/** "진짜 있어요" 재인증. 확인해준 사람 +10P, 미확정 제보면 작성자 확정 90P. */
+/** "진짜 있어요" 확인. 확인해준 사람 +10P, 미확정 제보면 작성자 +40P, 가게 등록자 +80P. */
 export async function verifyPost(postId: string): Promise<VerifyResult | null> {
   const { data, error } = await supabase.rpc('verify_post', { p_post_id: postId })
   if (error) throw new Error(error.message || '확인에 실패했어요')
-  return data as VerifyResult
+  const result = data as VerifyResult
+  if (result?.my_reward > 0) notifyPointsChanged()
+  return result
 }
 
 
@@ -285,6 +307,7 @@ export async function boostMarketItem(itemId: string, kind: BoostKind): Promise<
     p_cost: cost,
   })
   if (error) throw new Error(error.message || '설정에 실패했어요')
+  notifyPointsChanged()
   return data as string
 }
 
