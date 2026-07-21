@@ -75,8 +75,24 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
 
     setExistingPlaceId(null)
     setExistingProducts([])
-    // 카카오에서 고른 경우에만 비슷한 가게가 있는지 확인
+
+    // 카카오에서 고른 경우 → 이미 등록된 같은 가게가 있는지 확인
     const near = await findNearbyPlaces(lat, lng, place.kakao_id, place.place_name)
+
+    // 이름이 완전히 같고 아주 가까운 후보가 딱 하나면 물어보지 않고 바로 연결.
+    // (같은 가게가 명백한데 확인을 요구하면 불필요한 단계가 됩니다)
+    const norm = (v: string) => v.replace(/\s/g, '').toLowerCase()
+    const exact = near.filter(c => norm(c.place_name) === norm(place.place_name) && c.distance_m <= 100)
+
+    if (exact.length === 1) {
+      setExistingPlaceId(exact[0].id)
+      setDupCandidates([])
+      const prods = await placeProducts(exact[0].id)
+      setExistingProducts(prods)
+      return
+    }
+
+    // 애매한 경우에만 사용자에게 확인
     setDupCandidates(near)
   }
 
