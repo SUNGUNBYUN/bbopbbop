@@ -12,7 +12,15 @@
 
 -- ============================================================
 --  가게 좌표·주소 수정 + 연결된 제보/마켓까지 함께 갱신
---   · 그 가게를 등록한 사람만 수정 가능
+--
+--  수정 권한 (셋 중 하나면 가능):
+--   · 그 가게를 등록한 사람
+--   · 그 가게에 제보를 올린 사람 (실제로 가본 사람)
+--   · 등록자 정보가 없는 예전 가게
+--
+--  틀린 핀은 모두에게 피해라서, 최초 등록자만 고칠 수 있게 하면
+--  영영 안 고쳐집니다. 대신 아무나는 못 바꾸도록 '가본 사람'으로 제한합니다.
+--
 --   · 주소를 넘기지 않으면 기존 주소 유지
 -- ============================================================
 create or replace function update_place_location(
@@ -37,8 +45,17 @@ begin
     from places where id = p_place_id;
 
   if v_name is null then raise exception '가게를 찾을 수 없습니다'; end if;
-  if v_owner is not null and v_owner <> v_user then
-    raise exception '이 가게를 등록한 분만 위치를 수정할 수 있어요';
+
+  -- 등록자이거나, 이 가게에 제보를 올린 적이 있으면 수정 가능
+  if v_owner is not null
+     and v_owner <> v_user
+     and not exists (
+       select 1 from posts
+        where user_id = v_user
+          and (place_id = p_place_id or place_name = v_name)
+     )
+  then
+    raise exception '이 가게에 제보를 올린 분만 위치를 수정할 수 있어요';
   end if;
 
   v_addr := coalesce(nullif(btrim(coalesce(p_address, '')), ''), v_addr);

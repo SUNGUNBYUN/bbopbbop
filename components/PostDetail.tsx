@@ -143,7 +143,7 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)' }}>
       <Header
         left={<BackButton onClick={onBack} />}
         title="제보 상세"

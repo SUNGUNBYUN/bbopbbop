@@ -43,6 +43,18 @@ export default function Home() {
   const [balance, setBalance] = useState(0)
   const [showBounty, setShowBounty] = useState(false)
   const [openBountyCount, setOpenBountyCount] = useState(0)
+  // 같은 탭을 다시 누르면 그 탭의 상세 화면을 닫고 목록으로 돌아가기 위한 신호
+  const [tabResetKey, setTabResetKey] = useState(0)
+
+  function handleTabChange(next: number) {
+    if (next === activeTab) {
+      // 이미 보고 있는 탭 → 목록으로 초기화
+      setTabResetKey(k => k + 1)
+      setSelectedPost(null)
+    } else {
+      setActiveTab(next)
+    }
+  }
   const { show: showOnboarding, dismiss: dismissOnboarding } = useOnboarding()
 
   async function refreshBalance() {
@@ -146,27 +158,6 @@ export default function Home() {
     if (roomId) { setChatRoomId(roomId); setShowChat(true) }
   }
 
-  // ===== 제보 상세 =====
-  if (selectedPost) {
-    return (
-      <div className="app-shell">
-        <PostDetail
-          post={selectedPost}
-          user={user}
-          onBack={() => { setSelectedPost(null); fetchPosts() }}
-          onRequireAuth={requireAuth}
-          onOpenChat={() => { setChatRoomId(null); setShowChat(true) }}
-          onStartChat={startChat}
-          onEdit={() => { setEditingPost(selectedPost); setSelectedPost(null) }}
-          onDeleted={() => { setSelectedPost(null); fetchPosts(); showToast('제보가 삭제되었어요', '🗑') }}
-        />
-        {showChat && user && <ChatList user={user} initialRoomId={chatRoomId} onClose={() => { setShowChat(false); setChatRoomId(null) }} />}
-        {showAuth && <Auth onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
-        {toast && <Toast message={toast.msg} emoji={toast.emoji} />}
-      </div>
-    )
-  }
-
   // ===== 메인 =====
   return (
     <div className="app-shell">
@@ -228,14 +219,14 @@ export default function Home() {
           />
         )}
         {activeTab === 1 && <MapTab onSelectPost={(p) => setSelectedPost(p as Post)} onSelectMarket={() => setActiveTab(2)} />}
-        {activeTab === 2 && <MarketTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} />}
-        {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} onToast={showToast} />}
+        {activeTab === 2 && <MarketTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} resetKey={tabResetKey} />}
+        {activeTab === 3 && <FeedTab user={user} onRequireAuth={requireAuth} onOpenChat={openChatWith} onToast={showToast} resetKey={tabResetKey} />}
         {/* FAB — 제보 탭에서만 */}
         {activeTab === 0 && <FAB onClick={() => { if (!user) { requireAuth(); return }; setShowForm(true) }} />}
       </div>
 
       {/* 하단 네비 */}
-      <BottomNav active={activeTab} onChange={setActiveTab} />
+      <BottomNav active={activeTab} onChange={handleTabChange} />
 
       {/* 오버레이 */}
       {showBounty && (
@@ -271,6 +262,22 @@ export default function Home() {
           }}
         />
       )}
+      {/* 제보 상세 오버레이 — 하단 네비 유지 */}
+      {selectedPost && (
+        <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'var(--nav-h)', background: 'var(--bg)', zIndex: 140, display: 'flex', flexDirection: 'column' }}>
+          <PostDetail
+            post={selectedPost}
+            user={user}
+            onBack={() => { setSelectedPost(null); fetchPosts() }}
+            onRequireAuth={requireAuth}
+            onOpenChat={() => { setChatRoomId(null); setShowChat(true) }}
+            onStartChat={startChat}
+            onEdit={() => { setEditingPost(selectedPost); setSelectedPost(null) }}
+            onDeleted={() => { setSelectedPost(null); fetchPosts(); showToast('제보가 삭제되었어요', '🗑') }}
+          />
+        </div>
+      )}
+
       {/* 제보 작성 오버레이 — 하단 네비 위로 뜸(네비 유지) */}
       {(showForm || editingPost) && user && (
         <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'var(--nav-h)', background: 'var(--bg)', zIndex: 150, display: 'flex', flexDirection: 'column' }}>

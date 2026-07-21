@@ -13,12 +13,18 @@ import { PlaceSearchSheet } from '@/components/PlaceSearchSheet'
 import { PlaceMapView } from '@/components/PlaceMapView'
 
 type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
-type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat }
+type Props = {
+  user: User | null
+  onRequireAuth: () => void
+  onOpenChat: OpenChat
+  /** 하단 네비에서 같은 탭을 다시 누르면 값이 바뀜 → 상세를 닫고 목록으로 */
+  resetKey?: number
+}
 
 /** 끌어올리기 1회 비용(포인트) */
 const BUMP_COST = 20
 
-export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
+export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 0 }: Props) {
   const [items, setItems] = useState<MarketItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -28,6 +34,13 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat }: Props) {
   const [mapPlace, setMapPlace] = useState<MarketItem | null>(null)
 
   useEffect(() => { fetchItems() }, [])
+
+  // 같은 탭을 다시 누르면 목록으로 돌아가기
+  useEffect(() => {
+    if (resetKey > 0) {
+      setSelected(null); setShowForm(false); setEditing(null); setMapPlace(null)
+    }
+  }, [resetKey])
 
   async function fetchItems() {
     setLoading(true)

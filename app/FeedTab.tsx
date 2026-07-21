@@ -22,7 +22,14 @@ type FeedComment = {
 }
 
 type OpenChat = (otherId: string, otherNickname: string | null, sourceType: 'post' | 'market' | 'feed', sourceId: string, sourceTitle: string | null) => void
-type Props = { user: User | null; onRequireAuth: () => void; onOpenChat: OpenChat; onToast?: (msg: string, emoji?: string) => void }
+type Props = {
+  user: User | null
+  onRequireAuth: () => void
+  onOpenChat: OpenChat
+  onToast?: (msg: string, emoji?: string) => void
+  /** 하단 네비에서 같은 탭을 다시 누르면 값이 바뀜 → 상세를 닫고 목록으로 */
+  resetKey?: number
+}
 
 /** 글에 담긴 사진들을 배열로 (구버전 image_url 호환) */
 function galleryOf(feed: FeedPost): string[] {
@@ -47,7 +54,7 @@ function PlaceBadge({ name, addr, size = 'sm' }: { name: string; addr?: string |
   )
 }
 
-export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast }: Props) {
+export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, resetKey = 0 }: Props) {
   const [feeds, setFeeds] = useState<FeedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -59,6 +66,13 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast }: Pr
 
   useEffect(() => { fetchFeeds() }, [])
   useEffect(() => { if (user) fetchMyLikes() }, [user])
+
+  // 같은 탭을 다시 누르면 목록으로 돌아가기
+  useEffect(() => {
+    if (resetKey > 0) {
+      setSelected(null); setShowForm(false); setEditing(null); setMapPlace(null)
+    }
+  }, [resetKey])
 
   async function fetchFeeds() {
     setLoading(true)
