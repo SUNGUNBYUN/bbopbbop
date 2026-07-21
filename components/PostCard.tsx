@@ -32,14 +32,17 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
             lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           }}>{post.title}</p>
 
-          {post.location && (
+          {(post.place_name || post.location) && (
             <p style={{
               fontSize: '12.5px', color: 'var(--ink-3)', margin: '0 0 3px',
               display: 'flex', alignItems: 'center', gap: '3px',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
               <span style={{ flexShrink: 0 }}>📍</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.location}</span>
+              {/* 가게명을 우선 표시. 없으면 주소로 대체 */}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: post.place_name ? 700 : 400, color: post.place_name ? 'var(--ink-2)' : 'var(--ink-3)' }}>
+                {post.place_name || post.location}
+              </span>
             </p>
           )}
 
