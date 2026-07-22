@@ -173,7 +173,7 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
         )}
       </main>
 
-      <button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }} className="pressable" style={{ position: 'absolute', bottom: 'calc(var(--nav-h) + 16px)', right: '18px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', fontSize: '28px', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', zIndex: 40 }}>+</button>
+      <button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }} className="pressable" style={{ position: 'absolute', bottom: '16px', right: '16px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', fontSize: '28px', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', zIndex: 40 }}>+</button>
 
       {mapPlace && mapPlace.place_name && mapPlace.latitude != null && mapPlace.longitude != null && (
         <PlaceMapView

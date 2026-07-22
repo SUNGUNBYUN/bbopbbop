@@ -155,7 +155,7 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
                 <div className="skeleton" style={{ width: '34px', height: '34px', borderRadius: '50%' }} />
                 <div className="skeleton" style={{ width: '90px', height: '13px' }} />
               </div>
-              <div className="skeleton" style={{ width: '100%', aspectRatio: '1' }} />
+              <div className="skeleton" style={{ width: '100%', paddingBottom: '100%' }} />
             </div>
           ))
         ) : feeds.length === 0 ? (
@@ -183,12 +183,12 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
                 {imgs.length > 0 && (
                   <div
                     onClick={() => setSelected(feed)}
-                    style={{ cursor: 'pointer', position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: 'var(--surface-2)' }}
+                    style={{ cursor: 'pointer', position: 'relative', width: '100%', paddingBottom: '100%', overflow: 'hidden', background: 'var(--surface-2)' }}
                   >
                     <img
                       src={imgs[0]}
                       alt="자랑"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                     />
                     {imgs.length > 1 && (
                       <span style={{ position: 'absolute', right: '10px', bottom: '10px', background: 'rgba(26,21,35,0.6)', color: '#fff', fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--r-full)' }}>
@@ -254,7 +254,7 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
         )}
       </main>
 
-      <button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }} className="pressable" style={{ position: 'absolute', bottom: 'calc(var(--nav-h) + 16px)', right: '18px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', fontSize: '28px', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', zIndex: 40 }}>+</button>
+      <button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }} className="pressable" style={{ position: 'absolute', bottom: '16px', right: '16px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--coral)', color: '#fff', fontSize: '28px', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)', zIndex: 40 }}>+</button>
 
       {mapPlace && mapPlace.place_name && mapPlace.latitude != null && mapPlace.longitude != null && (
         <PlaceMapView
