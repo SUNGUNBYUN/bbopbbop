@@ -74,10 +74,9 @@ export function BountyBoard({ user, posts, balance, onClose, onRequireAuth, onCh
       <Header left={<BackButton onClick={onClose} />} title="🎯 제보 현상금" />
 
       {/* 안내 */}
-      <div style={{ padding: '12px 16px', background: 'var(--coral-soft)', flexShrink: 0 }}>
-        <p style={{ fontSize: '12.5px', color: 'var(--coral)', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>
-          찾는 인형이 있나요? 포인트를 걸고 물어보세요.<br />
-          좋은 제보를 채택하면 그 분에게 포인트가 전해져요.
+      <div style={{ padding: '9px 16px', background: 'var(--coral-soft)', flexShrink: 0 }}>
+        <p style={{ fontSize: '12px', color: 'var(--coral)', fontWeight: 600, margin: 0, lineHeight: 1.45 }}>
+          포인트를 걸고 찾는 인형을 물어보세요. 좋은 제보를 채택하면 포인트가 전해져요.
         </p>
       </div>
 
@@ -98,7 +97,7 @@ export function BountyBoard({ user, posts, balance, onClose, onRequireAuth, onCh
         ))}
       </div>
 
-      <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '0 16px 90px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '0 16px 90px', display: 'flex', flexDirection: 'column', gap: '9px' }}>
         {loading ? (
           <Spinner label="불러오는 중" />
         ) : shown.length === 0 ? (
@@ -114,29 +113,22 @@ export function BountyBoard({ user, posts, balance, onClose, onRequireAuth, onCh
                 key={b.id}
                 onClick={() => setSelected(b)}
                 className="pressable"
-                style={{ textAlign: 'left', width: '100%', padding: '15px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: 'none', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }}
+                style={{ textAlign: 'left', width: '100%', padding: '12px 13px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: 'none', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                    {/* 제목 + 상태 뱃지 한 줄 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
                       <Badge color={st.color} bg={st.bg}>{st.text}</Badge>
-                      {b.status === 'open' && (
-                        <span style={{ fontSize: '11.5px', color: 'var(--ink-4)', fontWeight: 600 }}>
-                          {left > 0 ? `${left}일 남음` : '오늘 마감'}
-                        </span>
-                      )}
+                      <p style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--ink)', margin: 0, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.title}</p>
                     </div>
-                    <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px', lineHeight: 1.35 }}>{b.title}</p>
-                    {b.place_name && (
-                      <p style={{ fontSize: '12.5px', color: 'var(--coral)', fontWeight: 600, margin: '0 0 4px' }}>📍 {b.place_name}</p>
-                    )}
-                    <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0 }}>
-                      {b.nickname ?? '익명'} · {timeAgo(b.created_at)} · 답변 {b.answer_count}
+                    <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {b.place_name ? `📍 ${b.place_name} · ` : ''}{b.nickname ?? '익명'} · 답변 {b.answer_count}{b.status === 'open' ? (left > 0 ? ` · ${left}일 남음` : ' · 오늘 마감') : ''}
                     </p>
                   </div>
-                  <div style={{ flexShrink: 0, textAlign: 'center', padding: '8px 12px', borderRadius: 'var(--r-md)', background: 'var(--butter-soft)' }}>
-                    <p style={{ fontSize: '17px', fontWeight: 800, color: 'var(--warning)', margin: 0 }}>{b.reward}</p>
-                    <p style={{ fontSize: '10.5px', color: 'var(--warning)', margin: 0, fontWeight: 700 }}>P</p>
+                  <div style={{ flexShrink: 0, textAlign: 'center', padding: '6px 11px', borderRadius: 'var(--r-md)', background: 'var(--butter-soft)' }}>
+                    <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--warning)' }}>{b.reward}</span>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--warning)' }}>P</span>
                   </div>
                 </div>
               </button>

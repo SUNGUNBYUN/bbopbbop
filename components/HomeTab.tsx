@@ -22,18 +22,8 @@ const SORTS: { key: SortKey; label: string }[] = [
 export function HomeTab({ posts, loading, onSelectPost, onNewPost, onOpenBounty, openBountyCount = 0 }: Props) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('recent')
-  const [activeTag, setActiveTag] = useState<string | null>(null)
 
   // 인기 태그 추출
-  const popularTags = useMemo(() => {
-    const counts: Record<string, number> = {}
-    posts.forEach(p => {
-      (p.tags ?? '').split(/[\s,#]+/).filter(Boolean).forEach(t => {
-        counts[t] = (counts[t] ?? 0) + 1
-      })
-    })
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => t)
-  }, [posts])
 
   const filtered = useMemo(() => {
     // 제목·장소뿐 아니라 기계에 든 인형 목록과 태그까지 검색
@@ -45,12 +35,11 @@ export function HomeTab({ posts, loading, onSelectPost, onNewPost, onOpenBounty,
       || (p.tags ?? '').includes(q)
       || (p.products ?? []).some(x => x.includes(q))
     )
-    if (activeTag) list = list.filter(p => (p.tags ?? '').includes(activeTag))
     if (sort === 'popular') list = [...list].sort((a, b) => (b.like_count ?? 0) - (a.like_count ?? 0))
     else if (sort === 'comments') list = [...list].sort((a, b) => (b.comment_count ?? 0) - (a.comment_count ?? 0))
     else list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     return list
-  }, [posts, search, activeTag, sort])
+  }, [posts, search, sort])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -74,29 +63,6 @@ export function HomeTab({ posts, loading, onSelectPost, onNewPost, onOpenBounty,
           )}
         </div>
 
-        {/* 인기 태그 */}
-        {popularTags.length > 0 && (
-          <div className="no-scrollbar" style={{ display: 'flex', gap: '7px', marginTop: '11px', overflowX: 'auto' }}>
-            {activeTag && (
-              <button
-                onClick={() => setActiveTag(null)}
-                style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 'var(--r-full)', border: 'none', background: 'var(--ink)', color: '#fff', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer' }}
-              >✕ 전체</button>
-            )}
-            {popularTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-                style={{
-                  flexShrink: 0, padding: '6px 12px', borderRadius: 'var(--r-full)',
-                  border: 'none', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
-                  background: activeTag === tag ? 'var(--coral)' : 'var(--surface-2)',
-                  color: activeTag === tag ? '#fff' : 'var(--ink-2)',
-                }}
-              >#{tag}</button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* 현상금 진입 */}
@@ -155,7 +121,7 @@ export function HomeTab({ posts, loading, onSelectPost, onNewPost, onOpenBounty,
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => <PostCardSkeleton key={i} />)
         ) : filtered.length === 0 ? (
-          search || activeTag ? (
+          search ? (
             <EmptyState emoji="🔍" title="검색 결과가 없어요" desc="다른 키워드로 찾아보거나 직접 제보해보세요" />
           ) : (
             <EmptyState

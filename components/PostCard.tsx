@@ -7,7 +7,19 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
   const fresh = freshness(post.last_verified_at, post.created_at)
   const isStale = fresh.level === 'stale'
   return (
-    <Card onClick={onClick} style={{ display: 'flex', gap: '12px', alignItems: 'stretch', padding: '11px', opacity: isStale ? 0.62 : 1 }}>
+    <Card onClick={onClick} style={{ display: 'flex', gap: '12px', alignItems: 'stretch', padding: '11px', opacity: isStale ? 0.62 : 1, position: 'relative' }}>
+      {/* 신선도 뱃지 — 카드 우상단 */}
+      {fresh.label && (
+        <span style={{
+          position: 'absolute', top: '9px', right: '10px', zIndex: 1,
+          display: 'inline-flex', alignItems: 'center', gap: '2px',
+          fontSize: '10px', fontWeight: 700, color: fresh.color, background: fresh.bg,
+          padding: '2px 8px', borderRadius: 'var(--r-full)',
+        }}>
+          {fresh.level === 'fresh' ? '✓' : '🕗'} {fresh.label}
+        </span>
+      )}
+
       {/* 썸네일 */}
       <div style={{
         width: '92px', height: '92px', borderRadius: 'var(--r-md)', flexShrink: 0,
@@ -17,25 +29,13 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
         {post.image_url
           ? <img src={post.image_url} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <span style={{ fontSize: '30px', opacity: 0.5 }}>🧸</span>}
-        {/* 신선도 뱃지 — 사진 우상단 */}
-        {fresh.label && (
-          <span style={{
-            position: 'absolute', top: '5px', right: '5px',
-            display: 'inline-flex', alignItems: 'center', gap: '2px',
-            fontSize: '9.5px', fontWeight: 700, color: '#fff',
-            background: fresh.level === 'fresh' ? 'rgba(61,214,196,0.92)' : (fresh.level === 'stale' ? 'rgba(107,101,119,0.9)' : 'rgba(240,180,60,0.95)'),
-            padding: '2px 6px', borderRadius: 'var(--r-full)',
-          }}>
-            {fresh.level === 'fresh' ? '✓' : '🕗'} {fresh.label}
-          </span>
-        )}
       </div>
 
       {/* 본문 */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div>
           <p style={{
-            fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px',
+            fontSize: '15px', fontWeight: 700, color: 'var(--ink)', margin: '0 62px 4px 0',
             lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           }}>{post.title}</p>
 
