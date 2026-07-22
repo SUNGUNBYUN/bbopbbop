@@ -52,6 +52,8 @@ export type Place = {
   kakao_id?: string
   /** 뽑뽑에 직접 등록된 업체(카카오 검색에 없는 곳) */
   is_ours?: boolean
+  /** 카카오 없이 주민이 지도에서 직접 찾아 등록한 가게 */
+  hand_registered?: boolean
   /** 뽑뽑 DB의 가게 id — 이미 등록된 가게를 고른 경우 바로 연결 */
   place_id?: string
 }

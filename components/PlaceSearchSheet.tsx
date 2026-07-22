@@ -73,21 +73,16 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
       x: String(p.longitude),
       y: String(p.latitude),
       is_ours: true,
+      hand_registered: !!p.hand_registered,
       place_id: p.id,
     }))
   }
 
-  /** 카카오 키워드 검색 */
-  function searchKakao(q: string): Promise<Place[]> {
+  /** 카카오 한 번 검색 (옵션 지정) */
+  function kakaoOnce(q: string, options: any): Promise<Place[]> {
     return new Promise((resolve) => {
       if (!kakaoReady || !window.kakao?.maps?.services) { resolve([]); return }
       const ps = new window.kakao.maps.services.Places()
-      const options: any = {}
-      if (myLoc) {
-        options.location = new window.kakao.maps.LatLng(myLoc.lat, myLoc.lng)
-        options.radius = 20000 // 20km 이내 우선
-        options.sort = window.kakao.maps.services.SortBy.DISTANCE
-      }
       ps.keywordSearch(q, (data: any[], status: string) => {
         if (status === window.kakao.maps.services.Status.OK) {
           resolve(data.map((p: any) => ({
@@ -105,6 +100,29 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
         }
       }, options)
     })
+  }
+
+  /** 카카오 키워드 검색 — 내 주변 우선 + 전국까지 폭넓게 (카카오맵처럼) */
+  async function searchKakao(q: string): Promise<Place[]> {
+    // 1) 내 주변 20km (가까운 순)  2) 전국(정확도순) — 둘을 합쳐 누락 최소화
+    const near = myLoc
+      ? await kakaoOnce(q, {
+          location: new window.kakao.maps.LatLng(myLoc.lat, myLoc.lng),
+          radius: 20000,
+          sort: window.kakao.maps.services.SortBy.DISTANCE,
+        })
+      : []
+    const nation = await kakaoOnce(q, {})
+    // kakao_id(없으면 이름+주소)로 중복 제거, 내 주변 결과를 앞에
+    const seen = new Set<string>()
+    const out: Place[] = []
+    for (const p of [...near, ...nation]) {
+      const key = p.kakao_id ?? (p.place_name + '|' + p.road_address_name)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(p)
+    }
+    return out
   }
 
   async function search() {
@@ -183,6 +201,11 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
                 {place.is_ours && (
                   <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)', background: 'var(--mint-soft)', padding: '2px 7px', borderRadius: 'var(--r-full)', flexShrink: 0 }}>
                     뽑뽑 등록
+                  </span>
+                )}
+                {place.hand_registered && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--purple, #8B5CF6)', background: 'var(--purple-soft, #F3EEFF)', padding: '2px 7px', borderRadius: 'var(--r-full)', flexShrink: 0 }}>
+                    🗺️ 주민 등록
                   </span>
                 )}
                 {myLoc && (

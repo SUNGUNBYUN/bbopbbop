@@ -265,7 +265,7 @@ export function PostForm({ user, editing, onClose, onSubmitted }: Props) {
           {/* 기계 한 대에 여러 종류가 섞여 있는 경우가 많아 목록으로 받습니다 */}
           <div style={{ display: 'flex', gap: '8px' }}>
             <Input
-              placeholder="예) 노블래빗 진주 목걸이 (핑크, 화이트)"
+              placeholder="예) 잔망루피, 산리오 쿠로미, 짱구"
               value={productInput}
               error={!!errors.title}
               onChange={(e) => setProductInput(e.target.value)}
