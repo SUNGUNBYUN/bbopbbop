@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { User, MarketItem, Place } from '@/lib/types'
-import { timeAgo, formatPrice, tradeTypeText, marketStatus } from '@/lib/utils'
+import { timeAgo, formatPrice, tradeTypeText, marketStatus, viewerKey } from '@/lib/utils'
 import { notify } from '@/lib/social'
 import { bumpMarketItem, boostMarketItem, isActive, PIN_COST, HIGHLIGHT_COST } from '@/lib/points'
 import { Header, BackButton, IconButton, Avatar, Button, Input, Field, Badge, Stat, EmptyState } from '@/components/ui'
@@ -161,7 +161,7 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
                     <p style={{ fontSize: '16px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: 'auto 0 0' }}>{formatPrice(item.price, item.is_free)}</p>
 
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
-                      {(chatCounts[item.id] ?? 0) > 0 && <Stat icon="💬" value={chatCounts[item.id]} />}
+                      <Stat icon="💬" value={chatCounts[item.id] ?? 0} />
                       <Stat icon="👁" value={item.view_count} />
                       <Stat icon="❤️" value={item.like_count} />
                     </div>
@@ -188,9 +188,14 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
   )
 }
 
+// 이번 세션에 이미 조회수를 올린 상품 (중복 방지)
+const viewedMarket = new Set<string>()
 async function openDetail(item: MarketItem, setSelected: (i: MarketItem) => void) {
-  await supabase.rpc('increment_market_view', { item_id: item.id })
   setSelected(item)
+  if (!viewedMarket.has(item.id)) {
+    viewedMarket.add(item.id)
+    supabase.rpc('increment_market_view', { item_id: item.id, p_viewer: viewerKey() })
+  }
 }
 
 function MarketDetail({ item, user, onBack, onEdit, onRequireAuth, onOpenChat }: { item: MarketItem; user: User | null; onBack: () => void; onEdit: () => void; onRequireAuth: () => void; onOpenChat: OpenChat }) {

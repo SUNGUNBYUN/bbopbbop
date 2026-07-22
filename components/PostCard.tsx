@@ -17,10 +17,17 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
         {post.image_url
           ? <img src={post.image_url} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <span style={{ fontSize: '30px', opacity: 0.5 }}>🧸</span>}
-        {isStale && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', background: 'rgba(255,255,255,0.9)', padding: '2px 6px', borderRadius: 'var(--r-full)' }}>오래됨</span>
-          </div>
+        {/* 신선도 뱃지 — 사진 우상단 */}
+        {fresh.label && (
+          <span style={{
+            position: 'absolute', top: '5px', right: '5px',
+            display: 'inline-flex', alignItems: 'center', gap: '2px',
+            fontSize: '9.5px', fontWeight: 700, color: '#fff',
+            background: fresh.level === 'fresh' ? 'rgba(61,214,196,0.92)' : (fresh.level === 'stale' ? 'rgba(107,101,119,0.9)' : 'rgba(240,180,60,0.95)'),
+            padding: '2px 6px', borderRadius: 'var(--r-full)',
+          }}>
+            {fresh.level === 'fresh' ? '✓' : '🕗'} {fresh.label}
+          </span>
         )}
       </div>
 
@@ -33,33 +40,36 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
           }}>{post.title}</p>
 
           {(post.place_name || post.location) && (
-            <p style={{
-              fontSize: '12.5px', margin: '0 0 3px',
-              display: 'flex', alignItems: 'center', gap: '3px',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              <span style={{ flexShrink: 0 }}>📍</span>
-              <span style={{
-                overflow: 'hidden', textOverflow: 'ellipsis',
-                fontWeight: post.place_name ? 700 : 400,
-                color: post.place_name ? 'var(--ink-2)' : 'var(--ink-3)',
+            <div style={{ margin: '0 0 3px' }}>
+              <p style={{
+                fontSize: '12.5px', margin: 0,
+                display: 'flex', alignItems: 'center', gap: '3px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
-                {post.place_name || post.location}
-              </span>
-            </p>
+                <span style={{ flexShrink: 0 }}>📍</span>
+                <span style={{
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                  fontWeight: post.place_name ? 700 : 400,
+                  color: post.place_name ? 'var(--ink-2)' : 'var(--ink-3)',
+                }}>
+                  {post.place_name || post.location}
+                </span>
+              </p>
+              {/* 주소 (가게명과 다를 때만 아래 작게) */}
+              {post.place_name && post.location && post.location !== post.place_name && (
+                <p style={{
+                  fontSize: '11px', color: 'var(--ink-4)', margin: '1px 0 0', paddingLeft: '17px',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {post.location}
+                </p>
+              )}
+            </div>
           )}
 
-          {/* 신선도 뱃지 + 태그 한 줄 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
-            {fresh.label && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0, fontSize: '10px', fontWeight: 700, color: fresh.color, background: fresh.bg, padding: '2px 7px', borderRadius: 'var(--r-full)' }}>
-                {fresh.level === 'fresh' ? '✓' : '🕗'} {fresh.label}
-              </span>
-            )}
-            {post.tags && (
-              <span style={{ fontSize: '11px', color: 'var(--coral)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.tags}</span>
-            )}
-          </div>
+          {post.tags && (
+            <p style={{ fontSize: '11px', color: 'var(--coral)', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.tags}</p>
+          )}
         </div>
 
         {/* 메타 */}

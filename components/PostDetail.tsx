@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Post, Comment, User } from '@/lib/types'
-import { timeAgo, freshness } from '@/lib/utils'
+import { timeAgo, freshness, viewerKey } from '@/lib/utils'
 import { notify } from '@/lib/social'
 import { verifyPost } from '@/lib/points'
 import { Header, BackButton, IconButton, Avatar, Button, Stat, Input } from './ui'
@@ -47,7 +47,7 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
     // 조회수는 이 제보에 대해 한 번만 (StrictMode 이중 호출/리렌더 방지)
     if (viewedRef.current !== post.id) {
       viewedRef.current = post.id
-      supabase.rpc('increment_view_count', { post_id: post.id })
+      supabase.rpc('increment_view_count', { post_id: post.id, p_viewer: viewerKey() })
     }
   }, [post.id])
 

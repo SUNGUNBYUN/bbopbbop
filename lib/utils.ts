@@ -66,3 +66,21 @@ export function freshness(lastVerifiedAt?: string | null, createdAt?: string): F
   if (days <= 30) return { level: 'aging', label: `${days}일 전 확인`, color: 'var(--ink-3)', bg: 'var(--surface-2)', days }
   return { level: 'stale', label: '오래된 정보', color: 'var(--ink-4)', bg: 'var(--surface-2)', days }
 }
+
+/**
+ * 익명 뷰어 키 — 로그인 안 한 사람도 조회수를 사람당 1회로 세기 위한 브라우저 고유값.
+ * localStorage에 한 번 만들어 두고 재사용.
+ */
+export function viewerKey(): string {
+  if (typeof window === 'undefined') return ''
+  try {
+    let k = localStorage.getItem('bbop_viewer')
+    if (!k) {
+      k = 'anon_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+      localStorage.setItem('bbop_viewer', k)
+    }
+    return k
+  } catch {
+    return ''
+  }
+}
