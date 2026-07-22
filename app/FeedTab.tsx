@@ -181,8 +181,20 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
                 </div>
 
                 {imgs.length > 0 && (
-                  <div onClick={() => setSelected(feed)} style={{ cursor: 'pointer' }}>
-                    <ImageGallery images={imgs} />
+                  <div
+                    onClick={() => setSelected(feed)}
+                    style={{ cursor: 'pointer', position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: 'var(--surface-2)' }}
+                  >
+                    <img
+                      src={imgs[0]}
+                      alt="자랑"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                    {imgs.length > 1 && (
+                      <span style={{ position: 'absolute', right: '10px', bottom: '10px', background: 'rgba(26,21,35,0.6)', color: '#fff', fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--r-full)' }}>
+                        📷 {imgs.length}
+                      </span>
+                    )}
                   </div>
                 )}
 

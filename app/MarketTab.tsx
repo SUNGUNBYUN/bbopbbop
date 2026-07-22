@@ -78,12 +78,15 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
 
       <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 90px' }}>
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i}>
-                <div className="skeleton" style={{ width: '100%', aspectRatio: '1', borderRadius: 'var(--r-md)' }} />
-                <div className="skeleton" style={{ width: '80%', height: '13px', marginTop: '8px' }} />
-                <div className="skeleton" style={{ width: '50%', height: '13px', marginTop: '6px' }} />
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{ display: 'flex', gap: '13px', padding: '14px 2px', borderBottom: '1px solid var(--line)' }}>
+                <div className="skeleton" style={{ width: '106px', height: '106px', borderRadius: 'var(--r-md)', flexShrink: 0 }} />
+                <div style={{ flex: 1, paddingTop: '4px' }}>
+                  <div className="skeleton" style={{ width: '75%', height: '15px' }} />
+                  <div className="skeleton" style={{ width: '40%', height: '13px', marginTop: '10px' }} />
+                  <div className="skeleton" style={{ width: '55%', height: '13px', marginTop: '8px' }} />
+                </div>
               </div>
             ))}
           </div>
@@ -92,42 +95,57 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
             ? <EmptyState emoji="🔍" title="검색 결과가 없어요" desc="다른 키워드로 찾아보세요" />
             : <EmptyState emoji="🛍️" title="아직 상품이 없어요" desc="안 쓰는 인형을 나누거나 팔아보세요!" action={<Button onClick={() => { if (!user) { onRequireAuth(); return }; setShowForm(true) }}>+ 첫 상품 올리기</Button>} />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {filtered.map(item => {
               const badge = marketStatus(item.status)
+              const highlighted = isActive(item.highlight_until)
               return (
-                <div key={item.id} onClick={() => openDetail(item, setSelected)} className="pressable" style={{ cursor: 'pointer', background: 'var(--surface)', borderRadius: 'var(--r-md)', overflow: 'hidden', boxShadow: isActive(item.highlight_until) ? '0 0 0 2px var(--coral)' : 'var(--shadow-sm)' }}>
-                  <div style={{ width: '100%', aspectRatio: '1', overflow: 'hidden', background: 'var(--surface-2)', position: 'relative' }}>
+                <div
+                  key={item.id}
+                  onClick={() => openDetail(item, setSelected)}
+                  className="pressable"
+                  style={{
+                    display: 'flex', gap: '13px', padding: '14px 2px',
+                    borderBottom: '1px solid var(--line)', cursor: 'pointer',
+                    background: highlighted ? 'var(--coral-soft)' : 'transparent',
+                    borderRadius: highlighted ? 'var(--r-md)' : 0,
+                  }}
+                >
+                  {/* 사진 (왼쪽 정사각형) */}
+                  <div style={{ width: '106px', height: '106px', flexShrink: 0, borderRadius: 'var(--r-md)', overflow: 'hidden', background: 'var(--surface-2)', position: 'relative' }}>
                     {isActive(item.pinned_until) && (
-                      <div style={{ position: 'absolute', top: '6px', left: '6px', zIndex: 2, fontSize: '10px', fontWeight: 800, color: '#fff', background: 'var(--coral)', padding: '3px 7px', borderRadius: 'var(--r-full)' }}>📌 고정</div>
+                      <div style={{ position: 'absolute', top: '5px', left: '5px', zIndex: 2, fontSize: '9.5px', fontWeight: 800, color: '#fff', background: 'var(--coral)', padding: '2px 6px', borderRadius: 'var(--r-full)' }}>📌</div>
                     )}
                     {item.image_url
-                      ? <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', opacity: 0.5 }}>🧸</div>}
+                      ? <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', opacity: 0.5 }}>🧸</div>}
                     {item.status !== 'selling' && (
-                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(26,21,35,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ color: '#fff', fontSize: '14px', fontWeight: 700 }}>{badge.text}</span>
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(26,21,35,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700 }}>{badge.text}</span>
                       </div>
                     )}
                   </div>
-                  <div style={{ padding: '9px 10px 11px' }}>
-                    <p style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</p>
-                    <p style={{ fontSize: '15px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: '0 0 6px' }}>{formatPrice(item.price, item.is_free)}</p>
+
+                  {/* 정보 (오른쪽) */}
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <p style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ink)', margin: '2px 0 5px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.title}</p>
+
                     {item.place_name && (
-                      item.latitude != null && item.longitude != null ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setMapPlace(item) }}
-                          style={{ background: 'none', border: 'none', padding: 0, margin: '0 0 6px', cursor: 'pointer', display: 'block', width: '100%', textAlign: 'left' }}
-                        >
-                          <p style={{ fontSize: '11.5px', color: 'var(--coral)', fontWeight: 700, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📍 {item.place_name} ›</p>
-                        </button>
-                      ) : (
-                        <p style={{ fontSize: '11.5px', color: 'var(--coral)', fontWeight: 700, margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📍 {item.place_name}</p>
-                      )
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (item.latitude != null && item.longitude != null) setMapPlace(item) }}
+                        style={{ background: 'none', border: 'none', padding: 0, margin: '0 0 4px', cursor: (item.latitude != null) ? 'pointer' : 'default', textAlign: 'left', maxWidth: '100%' }}
+                      >
+                        <span style={{ fontSize: '12px', color: 'var(--ink-4)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                          📍 {item.place_name}
+                        </span>
+                      </button>
                     )}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <Stat icon="❤️" value={item.like_count} />
+
+                    <p style={{ fontSize: '16px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: 'auto 0 0' }}>{formatPrice(item.price, item.is_free)}</p>
+
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
                       <Stat icon="👁" value={item.view_count} />
+                      <Stat icon="❤️" value={item.like_count} />
                     </div>
                   </div>
                 </div>
