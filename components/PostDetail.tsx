@@ -21,10 +21,11 @@ type Props = {
   onStartChat: () => void
   onEdit: () => void
   onDeleted: () => void
+  onViewCount?: (id: string, count: number) => void
 }
 
-export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onStartChat, onEdit, onDeleted }: Props) {
-  const [viewCount, setViewCount] = useState(0)
+export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onStartChat, onEdit, onDeleted, onViewCount }: Props) {
+  const [viewCount, setViewCount] = useState(post.view_count ?? 0)
   const [likeCount, setLikeCount] = useState(0)
   const [myLiked, setMyLiked] = useState(false)
   const [likeLoading, setLikeLoading] = useState(false)
@@ -43,20 +44,21 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
   const viewedRef = useRef<string | null>(null)
 
   useEffect(() => {
-    fetchDetail()
-    // 조회수 +1 (같은 사람은 서버가 중복 제외). 응답으로 최신 조회수를 바로 반영.
-    if (viewedRef.current !== post.id) {
-      viewedRef.current = post.id
-      ;(async () => {
-        const { data } = await supabase.rpc('increment_view_count', { post_id: post.id, p_viewer: viewerKey() })
-        if (typeof data === 'number') setViewCount(data)
-      })()
-    }
+    // 조회를 먼저 +1 한 뒤 상세를 읽어야, fetchDetail이 예전 값으로 덮어쓰지 않음
+    ;(async () => {
+      if (viewedRef.current !== post.id) {
+        viewedRef.current = post.id
+        const { data, error } = await supabase.rpc('increment_view_count', { post_id: post.id, p_viewer: viewerKey() })
+        if (error) console.warn('조회수 증가 실패', error)
+        if (typeof data === 'number') { setViewCount(data); onViewCount?.(post.id, data) }
+      }
+      fetchDetail()
+    })()
   }, [post.id])
 
   async function fetchDetail() {
     const { data: postData } = await supabase.from('posts').select('*').eq('id', post.id).single()
-    if (postData) { setViewCount(postData.view_count ?? 0); setLikeCount(postData.like_count ?? 0) }
+    if (postData) { setViewCount(v => Math.max(v, postData.view_count ?? 0)); setLikeCount(postData.like_count ?? 0) }
     const { data: likesData } = await supabase.from('likes').select('*').eq('post_id', post.id)
     if (likesData) { setLikeCount(likesData.length); if (user) setMyLiked(likesData.some(l => l.user_id === user.id)) }
     const { data: commentsData } = await supabase.from('comments').select('*').eq('post_id', post.id).order('created_at', { ascending: true })

@@ -54,7 +54,7 @@ export function FAB({ onClick }: { onClick: () => void }) {
       className="pressable"
       aria-label="새 글 작성"
       style={{
-        position: 'absolute', bottom: 'calc(var(--nav-h) + 16px)', right: '18px',
+        position: 'absolute', bottom: '16px', right: '16px',
         width: '56px', height: '56px', borderRadius: '50%',
         background: 'var(--coral)', color: '#fff', fontSize: '28px', fontWeight: 300,
         border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-coral)',

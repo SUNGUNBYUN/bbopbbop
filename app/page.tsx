@@ -274,6 +274,7 @@ export default function Home() {
             onStartChat={startChat}
             onEdit={() => { setEditingPost(selectedPost); setSelectedPost(null) }}
             onDeleted={() => { setSelectedPost(null); fetchPosts(); showToast('제보가 삭제되었어요', '🗑') }}
+            onViewCount={(id, count) => setPosts(prev => prev.map(p => p.id === id ? { ...p, view_count: count } : p))}
           />
         </div>
       )}
