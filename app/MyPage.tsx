@@ -83,9 +83,9 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
       <Header left={<BackButton onClick={onClose} />} title="마이페이지" />
 
       {/* 프로필 카드 */}
-      <div style={{ padding: '20px 20px 22px', background: 'linear-gradient(135deg, var(--coral) 0%, var(--coral-dark) 100%)', color: '#fff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 800, flexShrink: 0, fontFamily: 'var(--font-display)', backdropFilter: 'blur(4px)' }}>{user.nickname?.[0] ?? '?'}</div>
+      <div style={{ padding: '13px 18px 15px', background: 'linear-gradient(135deg, var(--coral) 0%, var(--coral-dark) 100%)', color: '#fff' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '13px' }}>
+          <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '21px', fontWeight: 800, flexShrink: 0, fontFamily: 'var(--font-display)', backdropFilter: 'blur(4px)' }}>{user.nickname?.[0] ?? '?'}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: '19px', fontWeight: 800, margin: '0 0 3px' }}>{user.nickname}</p>
             <p style={{ fontSize: '12.5px', opacity: 0.85, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
@@ -100,17 +100,17 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
           const lv = levelOf(totalEarned)
           const { next, remain, progress } = nextLevelOf(totalEarned)
           return (
-            <div style={{ marginTop: '16px', padding: '13px 15px', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(4px)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: next ? '9px' : 0 }}>
-                <span style={{ fontSize: '15px', fontWeight: 800 }}>{lv.emoji} {lv.name}</span>
-                <span style={{ fontSize: '11.5px', opacity: 0.9, fontWeight: 600 }}>누적 {totalEarned.toLocaleString()}P</span>
+            <div style={{ marginTop: '11px', padding: '10px 13px', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(4px)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: next ? '7px' : 0 }}>
+                <span style={{ fontSize: '14px', fontWeight: 800 }}>{lv.emoji} {lv.name}</span>
+                <span style={{ fontSize: '11px', opacity: 0.9, fontWeight: 600 }}>누적 {totalEarned.toLocaleString()}P</span>
               </div>
               {next && (
                 <>
-                  <div style={{ height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,0.3)', overflow: 'hidden' }}>
+                  <div style={{ height: '5px', borderRadius: '999px', background: 'rgba(255,255,255,0.3)', overflow: 'hidden' }}>
                     <div style={{ width: `${Math.round(progress * 100)}%`, height: '100%', background: '#fff', borderRadius: '999px', transition: 'width 0.3s ease' }} />
                   </div>
-                  <p style={{ fontSize: '11px', opacity: 0.9, margin: '6px 0 0' }}>
+                  <p style={{ fontSize: '10.5px', opacity: 0.9, margin: '5px 0 0' }}>
                     {next.emoji} {next.name}까지 {remain.toLocaleString()}P 남았어요
                   </p>
                 </>
@@ -119,11 +119,11 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
           )
         })()}
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '11px' }}>
           {[{ n: counts.posts, l: '제보' }, { n: counts.market, l: '마켓' }, { n: counts.feed, l: '피드' }].map(s => (
-            <div key={s.l} style={{ flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 'var(--r-md)', padding: '10px', textAlign: 'center', backdropFilter: 'blur(4px)' }}>
-              <p style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 2px' }}>{s.n}</p>
-              <p style={{ fontSize: '11.5px', opacity: 0.85, margin: 0 }}>{s.l}</p>
+            <div key={s.l} style={{ flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 'var(--r-md)', padding: '7px', textAlign: 'center', backdropFilter: 'blur(4px)' }}>
+              <p style={{ fontSize: '17px', fontWeight: 800, margin: '0 0 1px' }}>{s.n}</p>
+              <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>{s.l}</p>
             </div>
           ))}
         </div>
@@ -131,7 +131,7 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
         {/* 베타 · 의견/버그 제보 */}
         <a
           href="mailto:tlgja05@gmail.com?subject=%5B%EB%BD%91%EB%BD%91%5D%20%EC%9D%98%EA%B2%AC%C2%B7%EB%B2%84%EA%B7%B8%20%EC%A0%9C%EB%B3%B4"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '12px', padding: '11px', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: '12.5px', fontWeight: 700, textDecoration: 'none', backdropFilter: 'blur(4px)' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '9px', padding: '8px', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: '12px', fontWeight: 700, textDecoration: 'none', backdropFilter: 'blur(4px)' }}
         >
           💌 베타 서비스예요 · 의견·버그 알려주기
         </a>
