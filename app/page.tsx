@@ -47,10 +47,13 @@ export default function Home() {
   const [tabResetKey, setTabResetKey] = useState(0)
 
   function handleTabChange(next: number) {
+    // 어떤 탭을 누르든 열려있는 제보 상세/작성 오버레이는 먼저 닫는다
+    // (마켓/피드와 달리 제보 상세·작성은 페이지 레벨 오버레이라 탭만 바꾸면 그대로 덮여 있음)
+    setSelectedPost(null)
+    setShowForm(false)
+    setEditingPost(null)
     if (next === activeTab) {
-      // 이미 보고 있는 탭 → 목록으로 초기화
-      setTabResetKey(k => k + 1)
-      setSelectedPost(null)
+      setTabResetKey(k => k + 1)   // 같은 탭 → 목록으로 초기화
     } else {
       setActiveTab(next)
     }
