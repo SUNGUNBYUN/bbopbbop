@@ -44,10 +44,13 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
 
   useEffect(() => {
     fetchDetail()
-    // 조회수는 이 제보에 대해 한 번만 (StrictMode 이중 호출/리렌더 방지)
+    // 조회수 +1 (같은 사람은 서버가 중복 제외). 응답으로 최신 조회수를 바로 반영.
     if (viewedRef.current !== post.id) {
       viewedRef.current = post.id
-      supabase.rpc('increment_view_count', { post_id: post.id, p_viewer: viewerKey() })
+      ;(async () => {
+        const { data } = await supabase.rpc('increment_view_count', { post_id: post.id, p_viewer: viewerKey() })
+        if (typeof data === 'number') setViewCount(data)
+      })()
     }
   }, [post.id])
 

@@ -39,20 +39,30 @@ alter table market_views enable row level security;
 -- ============================================================
 --  2. 제보 조회 — 처음 보는 사람일 때만 +1
 -- ============================================================
+-- 반환 타입이 void→int로 바뀌므로 기존 함수 제거 (replace 불가)
+drop function if exists increment_view_count(uuid);
+drop function if exists increment_view_count(uuid, text);
 create or replace function increment_view_count(post_id uuid, p_viewer text default null)
-returns void as $$
+returns int as $$
 declare
-  v_key text := coalesce(nullif(p_viewer, ''), auth.uid()::text);
+  v_key text := coalesce(nullif(p_viewer, ''), auth.uid()::text, gen_random_uuid()::text);
+  v_new int;
+  v_inserted boolean := false;
 begin
-  if v_key is null then return; end if;   -- 식별 불가하면 세지 않음
-
   insert into post_views(post_id, viewer_key)
   values (post_id, v_key)
   on conflict (post_id, viewer_key) do nothing;
+  get diagnostics v_new = row_count;   -- 1이면 새로 들어감
+  v_inserted := (v_new = 1);
 
-  if found then
-    update posts set view_count = coalesce(view_count, 0) + 1 where id = post_id;
+  if v_inserted then
+    update posts set view_count = coalesce(view_count, 0) + 1 where id = post_id
+      returning view_count into v_new;
+  else
+    select view_count into v_new from posts where id = post_id;
   end if;
+
+  return coalesce(v_new, 0);
 end;
 $$ language plpgsql security definer;
 
@@ -60,20 +70,29 @@ $$ language plpgsql security definer;
 -- ============================================================
 --  3. 마켓 조회 — 처음 보는 사람일 때만 +1
 -- ============================================================
+drop function if exists increment_market_view(uuid);
+drop function if exists increment_market_view(uuid, text);
 create or replace function increment_market_view(item_id uuid, p_viewer text default null)
-returns void as $$
+returns int as $$
 declare
-  v_key text := coalesce(nullif(p_viewer, ''), auth.uid()::text);
+  v_key text := coalesce(nullif(p_viewer, ''), auth.uid()::text, gen_random_uuid()::text);
+  v_new int;
+  v_inserted boolean := false;
 begin
-  if v_key is null then return; end if;
-
   insert into market_views(item_id, viewer_key)
   values (item_id, v_key)
   on conflict (item_id, viewer_key) do nothing;
+  get diagnostics v_new = row_count;
+  v_inserted := (v_new = 1);
 
-  if found then
-    update market_items set view_count = coalesce(view_count, 0) + 1 where id = item_id;
+  if v_inserted then
+    update market_items set view_count = coalesce(view_count, 0) + 1 where id = item_id
+      returning view_count into v_new;
+  else
+    select view_count into v_new from market_items where id = item_id;
   end if;
+
+  return coalesce(v_new, 0);
 end;
 $$ language plpgsql security definer;
 
