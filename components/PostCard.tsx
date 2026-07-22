@@ -6,6 +6,16 @@ import { Card, Stat } from './ui'
 export function PostCard({ post, onClick }: { post: Post; onClick: () => void }) {
   const fresh = freshness(post.last_verified_at, post.created_at)
   const isStale = fresh.level === 'stale'
+  // 주소 필드에 가게명이 앞에 붙어 오는 경우가 있어 순수 주소만 추림
+  //  예) "토마토이 (서울 동작구 노량진로16길 31)" → "서울 동작구 노량진로16길 31"
+  const addr = (() => {
+    const loc = (post.location ?? '').trim()
+    if (!loc) return ''
+    const m = loc.match(/\(([^)]+)\)/)
+    if (m) return m[1].trim()
+    if (post.place_name && loc.startsWith(post.place_name)) return loc.slice(post.place_name.length).replace(/^[\s(]+|[)\s]+$/g, '').trim()
+    return loc
+  })()
   return (
     <Card onClick={onClick} style={{ display: 'flex', gap: '12px', alignItems: 'stretch', padding: '11px', opacity: isStale ? 0.62 : 1, position: 'relative' }}>
       {/* 신선도 뱃지 — 카드 우상단 */}
@@ -55,20 +65,20 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
                   {post.place_name || post.location}
                 </span>
               </p>
-              {/* 주소 (가게명과 다를 때만 아래 작게) */}
-              {post.place_name && post.location && post.location !== post.place_name && (
+              {/* 주소 (가게명과 다를 때만 아래 작게, 순수 주소만) */}
+              {post.place_name && addr && addr !== post.place_name && (
                 <p style={{
                   fontSize: '11px', color: 'var(--ink-4)', margin: '1px 0 0', paddingLeft: '17px',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}>
-                  {post.location}
+                  {addr}
                 </p>
               )}
             </div>
           )}
 
           {post.tags && (
-            <p style={{ fontSize: '11px', color: 'var(--coral)', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.tags}</p>
+            <p style={{ fontSize: '11px', color: 'var(--coral)', fontWeight: 600, margin: '2px 0 0', paddingLeft: '17px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.tags}</p>
           )}
         </div>
 
