@@ -10,22 +10,29 @@ const SLIDES = [
     emoji: '📍',
     color: 'var(--coral)',
     bg: 'var(--coral-soft)',
-    title: '어디서 뭘 뽑을 수 있나요?',
-    desc: '내 주변 인형뽑기 업체를 지도로 확인하고,\n뭐가 있는지 제보를 남겨보세요.',
+    title: '내 주변 인형뽑기, 여기 다 있어요',
+    desc: '어느 가게에 무슨 인형이 있는지\n지도랑 제보로 미리 확인하고 가요.',
+  },
+  {
+    emoji: '🪙',
+    color: 'var(--butter)',
+    bg: 'var(--butter-soft)',
+    title: '제보하면 포인트가 쌓여요',
+    desc: '가게랑 인형을 알려주면 바로 적립,\n다른 사람이 "진짜 있어요" 확인하면 보너스까지.',
   },
   {
     emoji: '📸',
     color: 'var(--mint)',
     bg: 'var(--mint-soft)',
     title: '오늘 뭐 뽑았어요?',
-    desc: '어렵게 뽑아낸 인형을 자랑하고\n다른 덕후들의 전리품도 구경해보세요.',
+    desc: '어렵게 뽑은 인형을 자랑하고\n다른 덕후들의 전리품도 구경해요.',
   },
   {
     emoji: '🛍️',
-    color: 'var(--butter)',
-    bg: 'var(--butter-soft)',
-    title: '사고팔고 나누고',
-    desc: '원하는 인형은 찾고,\n중복된 건 나눠요. 뽑기 덕후들의 마켓.',
+    color: 'var(--coral)',
+    bg: 'var(--coral-soft)',
+    title: '남는 건 나누고, 찾는 건 구하고',
+    desc: '중복된 인형은 마켓에 내놓고\n갖고 싶던 건 저렴하게 데려와요.',
   },
 ]
 
@@ -89,6 +96,10 @@ export function Onboarding({ onDone }: Props) {
             <Button full size="lg" onClick={onDone}>🧸 시작하기</Button>
             <p style={{ fontSize: '12px', color: 'var(--ink-4)', textAlign: 'center', margin: 0 }}>
               가입 없이도 제보를 구경할 수 있어요
+            </p>
+            <p style={{ fontSize: '11.5px', color: 'var(--ink-4)', textAlign: 'center', margin: '2px 0 0', lineHeight: 1.5 }}>
+              아직 <b style={{ color: 'var(--coral)' }}>베타</b>예요. 불편하거나 버그가 있으면{' '}
+              <a href="mailto:tlgja05@gmail.com?subject=%5B%EB%BD%91%EB%BD%91%5D%20%EC%9D%98%EA%B2%AC%C2%B7%EB%B2%84%EA%B7%B8%20%EC%A0%9C%EB%B3%B4" style={{ color: 'var(--coral)', fontWeight: 700, textDecoration: 'none' }}>메일로 알려주세요</a>
             </p>
           </>
         ) : (

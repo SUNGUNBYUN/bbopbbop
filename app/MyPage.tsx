@@ -127,6 +127,14 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
             </div>
           ))}
         </div>
+
+        {/* 베타 · 의견/버그 제보 */}
+        <a
+          href="mailto:tlgja05@gmail.com?subject=%5B%EB%BD%91%EB%BD%91%5D%20%EC%9D%98%EA%B2%AC%C2%B7%EB%B2%84%EA%B7%B8%20%EC%A0%9C%EB%B3%B4"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '12px', padding: '11px', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: '12.5px', fontWeight: 700, textDecoration: 'none', backdropFilter: 'blur(4px)' }}
+        >
+          💌 베타 서비스예요 · 의견·버그 알려주기
+        </a>
       </div>
 
       {/* 탭 */}

@@ -22,7 +22,7 @@ export function ClawMark({ size = 28, animated = false }: { size?: number; anima
 }
 
 /** 로고 + 워드마크 */
-export function Logo({ size = 26 }: { size?: number }) {
+export function Logo({ size = 26, beta = false }: { size?: number; beta?: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
       <ClawMark size={size} animated />
@@ -35,6 +35,16 @@ export function Logo({ size = 26 }: { size?: number }) {
       }}>
         뽑뽑
       </span>
+      {beta && (
+        <span style={{
+          alignSelf: 'flex-start', marginTop: '1px',
+          fontSize: '9px', fontWeight: 800, letterSpacing: '0.5px',
+          color: 'var(--coral)', background: 'var(--coral-soft)',
+          padding: '2px 5px', borderRadius: '5px', lineHeight: 1,
+        }}>
+          BETA
+        </span>
+      )}
     </div>
   )
 }

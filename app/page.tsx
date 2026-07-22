@@ -172,7 +172,7 @@ export default function Home() {
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div onClick={() => { setActiveTab(0); setSelectedPost(null); setShowForm(false); setShowMyPage(false); setShowChat(false); setShowNotifications(false) }} style={{ cursor: 'pointer' }}>
-          <Logo />
+          <Logo beta />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
           {user && (
