@@ -264,7 +264,7 @@ export default function Home() {
       )}
       {/* 제보 상세 오버레이 — 하단 네비 유지 */}
       {selectedPost && (
-        <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'var(--nav-h)', background: 'var(--bg)', zIndex: 140, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'calc(var(--nav-h) + env(safe-area-inset-bottom))', background: 'var(--bg)', zIndex: 140, display: 'flex', flexDirection: 'column' }}>
           <PostDetail
             post={selectedPost}
             user={user}
@@ -281,7 +281,7 @@ export default function Home() {
 
       {/* 제보 작성 오버레이 — 하단 네비 위로 뜸(네비 유지) */}
       {(showForm || editingPost) && user && (
-        <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'var(--nav-h)', background: 'var(--bg)', zIndex: 150, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 'var(--app-max)', bottom: 'calc(var(--nav-h) + env(safe-area-inset-bottom))', background: 'var(--bg)', zIndex: 150, display: 'flex', flexDirection: 'column' }}>
           <PostForm
             user={user}
             editing={editingPost}

@@ -147,10 +147,10 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-      <main className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 90px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <main className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '12px 16px 90px' }}>
         {loading ? (
           Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
+            <div key={i} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px' }}>
                 <div className="skeleton" style={{ width: '34px', height: '34px', borderRadius: '50%' }} />
                 <div className="skeleton" style={{ width: '90px', height: '13px' }} />
@@ -164,7 +164,7 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
           feeds.map(feed => {
             const imgs = galleryOf(feed)
             return (
-              <div key={feed.id} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
+              <div key={feed.id} style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px' }}>
                   <Avatar name={feed.nickname} size={34} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -183,7 +183,7 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
                 {imgs.length > 0 && (
                   <div
                     onClick={() => setSelected(feed)}
-                    style={{ cursor: 'pointer', position: 'relative', width: '100%', paddingBottom: '100%', maxHeight: '72vh', overflow: 'hidden', background: 'var(--surface-2)' }}
+                    style={{ cursor: 'pointer', position: 'relative', width: '100%', paddingBottom: '100%', overflow: 'hidden', background: 'var(--surface-2)' }}
                   >
                     <img
                       src={imgs[0]}
