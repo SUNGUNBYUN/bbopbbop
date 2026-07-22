@@ -63,11 +63,8 @@ export function PlaceSearchSheet({ user, onSelect, onClose }: {
 
   /** 우리 DB(직접 등록된 업체) 검색 */
   async function searchOurPlaces(q: string): Promise<Place[]> {
-    const { data } = await supabase
-      .from('places')
-      .select('id, place_name, address, latitude, longitude')
-      .ilike('place_name', `%${q}%`)
-      .limit(15)
+    // 띄어쓰기 무시 검색 (예: "토이즈팝" 으로도 "토이즈 팝" 이 나오도록)
+    const { data } = await supabase.rpc('search_places', { p_q: q })
     if (!data) return []
     return data.map((p: any) => ({
       place_name: p.place_name,

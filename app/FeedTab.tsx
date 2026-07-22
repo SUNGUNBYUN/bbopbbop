@@ -183,7 +183,7 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
                 {imgs.length > 0 && (
                   <div
                     onClick={() => setSelected(feed)}
-                    style={{ cursor: 'pointer', position: 'relative', width: '100%', paddingBottom: '100%', overflow: 'hidden', background: 'var(--surface-2)' }}
+                    style={{ cursor: 'pointer', position: 'relative', width: '100%', paddingBottom: '100%', maxHeight: '72vh', overflow: 'hidden', background: 'var(--surface-2)' }}
                   >
                     <img
                       src={imgs[0]}
