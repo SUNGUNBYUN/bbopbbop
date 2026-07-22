@@ -7,10 +7,10 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
   const fresh = freshness(post.last_verified_at, post.created_at)
   const isStale = fresh.level === 'stale'
   return (
-    <Card onClick={onClick} style={{ display: 'flex', gap: '13px', alignItems: 'stretch', padding: '12px', opacity: isStale ? 0.62 : 1 }}>
+    <Card onClick={onClick} style={{ display: 'flex', gap: '12px', alignItems: 'stretch', padding: '11px', opacity: isStale ? 0.62 : 1 }}>
       {/* 썸네일 */}
       <div style={{
-        width: '84px', height: '84px', borderRadius: 'var(--r-md)', flexShrink: 0,
+        width: '92px', height: '92px', borderRadius: 'var(--r-md)', flexShrink: 0,
         background: 'var(--surface-2)', overflow: 'hidden', position: 'relative',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
@@ -32,64 +32,42 @@ export function PostCard({ post, onClick }: { post: Post; onClick: () => void })
             lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           }}>{post.title}</p>
 
-          {/* 이 기계에 든 인형들 */}
-          {post.products && post.products.length > 1 && (
+          {(post.place_name || post.location) && (
             <p style={{
-              fontSize: '11.5px', color: 'var(--ink-3)', margin: '0 0 4px',
+              fontSize: '12.5px', margin: '0 0 3px',
+              display: 'flex', alignItems: 'center', gap: '3px',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
-              🧸 {post.products.join(' · ')}
+              <span style={{ flexShrink: 0 }}>📍</span>
+              <span style={{
+                overflow: 'hidden', textOverflow: 'ellipsis',
+                fontWeight: post.place_name ? 700 : 400,
+                color: post.place_name ? 'var(--ink-2)' : 'var(--ink-3)',
+              }}>
+                {post.place_name || post.location}
+              </span>
             </p>
           )}
 
-          {(post.place_name || post.location) && (
-            <div style={{ margin: '0 0 3px' }}>
-              {/* 가게명 (굵게) + 주소 (아래 작게) */}
-              <p style={{
-                fontSize: '12.5px', margin: 0,
-                display: 'flex', alignItems: 'center', gap: '3px',
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                <span style={{ flexShrink: 0 }}>📍</span>
-                <span style={{
-                  overflow: 'hidden', textOverflow: 'ellipsis',
-                  fontWeight: post.place_name ? 700 : 400,
-                  color: post.place_name ? 'var(--ink-2)' : 'var(--ink-3)',
-                }}>
-                  {post.place_name || post.location}
-                </span>
-              </p>
-              {post.place_name && post.location && post.location !== post.place_name && (
-                <p style={{
-                  fontSize: '11.5px', color: 'var(--ink-4)', margin: '1px 0 0', paddingLeft: '17px',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {post.location}
-                </p>
-              )}
-            </div>
-          )}
-
-          {post.tags && (
-            <p style={{
-              fontSize: '11.5px', color: 'var(--coral)', margin: 0, fontWeight: 600,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>{post.tags}</p>
-          )}
+          {/* 신선도 뱃지 + 태그 한 줄 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+            {fresh.label && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0, fontSize: '10px', fontWeight: 700, color: fresh.color, background: fresh.bg, padding: '2px 7px', borderRadius: 'var(--r-full)' }}>
+                {fresh.level === 'fresh' ? '✓' : '🕗'} {fresh.label}
+              </span>
+            )}
+            {post.tags && (
+              <span style={{ fontSize: '11px', color: 'var(--coral)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.tags}</span>
+            )}
+          </div>
         </div>
 
-        {fresh.label && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', alignSelf: 'flex-start', fontSize: '10.5px', fontWeight: 700, color: fresh.color, background: fresh.bg, padding: '2px 8px', borderRadius: 'var(--r-full)', marginTop: '5px' }}>
-            {fresh.level === 'fresh' ? '✓' : '🕗'} {fresh.label}
-          </span>
-        )}
-
         {/* 메타 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-          <span style={{ fontSize: '11.5px', color: 'var(--ink-4)', fontWeight: 500 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--ink-4)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {post.nickname ?? '익명'} · {timeAgo(post.created_at)}
           </span>
-          <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
             <Stat icon="👁" value={compactNumber(post.view_count ?? 0)} />
             <Stat icon="❤️" value={compactNumber(post.like_count ?? 0)} />
           </div>

@@ -198,36 +198,54 @@ export default function FeedTab({ user, onRequireAuth, onOpenChat, onToast, rese
                   </div>
                 )}
 
-                <div style={{ padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: (feed.content || feed.place_name) ? '10px' : 0 }}>
-                    <button onClick={() => handleLike(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                      <span style={{ fontSize: '19px' }}>{likedFeeds.has(feed.id) ? '❤️' : '🤍'}</span>
-                      <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.like_count}</span>
+                <div style={{ padding: '8px 14px 13px' }}>
+                  {/* 인스타식 액션바 — 아이콘만 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '2px 0 8px' }}>
+                    <button onClick={() => handleLike(feed)} className="pressable" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '23px', lineHeight: 1 }}>
+                      {likedFeeds.has(feed.id) ? '❤️' : '🤍'}
                     </button>
-                    <button onClick={() => setSelected(feed)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                      <span style={{ fontSize: '18px' }}>💬</span>
-                      <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: 600 }}>{feed.comment_count}</span>
+                    <button onClick={() => setSelected(feed)} className="pressable" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '21px', lineHeight: 1 }}>
+                      💬
                     </button>
+                    {feed.place_name && feed.latitude != null && feed.longitude != null && (
+                      <button onClick={(e) => { e.stopPropagation(); setMapPlace(feed) }} className="pressable" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '20px', lineHeight: 1, marginLeft: 'auto' }}>
+                        📍
+                      </button>
+                    )}
                   </div>
 
-                  {feed.place_name && (
-                    <div style={{ marginBottom: feed.content ? '8px' : 0 }}>
-                      {feed.latitude != null && feed.longitude != null ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setMapPlace(feed) }}
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '100%' }}
-                        >
-                          <PlaceBadge name={feed.place_name} />
-                          <span style={{ fontSize: '11.5px', color: 'var(--ink-4)', fontWeight: 600, flexShrink: 0 }}>지도 ›</span>
-                        </button>
-                      ) : (
-                        <PlaceBadge name={feed.place_name} />
-                      )}
-                    </div>
+                  {/* 좋아요 수 (굵게) */}
+                  {feed.like_count > 0 && (
+                    <p style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 5px' }}>
+                      좋아요 {feed.like_count}개
+                    </p>
                   )}
 
+                  {/* 장소 */}
+                  {feed.place_name && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (feed.latitude != null && feed.longitude != null) setMapPlace(feed) }}
+                      style={{ background: 'none', border: 'none', padding: 0, margin: '0 0 5px', cursor: feed.latitude != null ? 'pointer' : 'default', display: 'block', textAlign: 'left', maxWidth: '100%' }}
+                    >
+                      <span style={{ fontSize: '12.5px', color: 'var(--coral)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', maxWidth: '100%' }}>
+                        📍 {feed.place_name}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* 캡션: 닉네임 + 본문 */}
                   {feed.content && (
-                    <p onClick={() => setSelected(feed)} style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5, cursor: 'pointer', whiteSpace: 'pre-wrap' }}>{feed.content}</p>
+                    <p onClick={() => setSelected(feed)} style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.55, cursor: 'pointer', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      <b style={{ fontWeight: 700, marginRight: '5px' }}>{feed.nickname ?? '익명'}</b>
+                      <span style={{ whiteSpace: 'pre-wrap' }}>{feed.content}</span>
+                    </p>
+                  )}
+
+                  {/* 댓글 보기 */}
+                  {feed.comment_count > 0 && (
+                    <button onClick={() => setSelected(feed)} style={{ background: 'none', border: 'none', padding: 0, margin: '5px 0 0', cursor: 'pointer', fontSize: '13px', color: 'var(--ink-4)' }}>
+                      댓글 {feed.comment_count}개 모두 보기
+                    </button>
                   )}
                 </div>
               </div>

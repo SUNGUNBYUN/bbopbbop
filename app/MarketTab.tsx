@@ -32,6 +32,8 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
   const [editing, setEditing] = useState<MarketItem | null>(null)
   const [selected, setSelected] = useState<MarketItem | null>(null)
   const [mapPlace, setMapPlace] = useState<MarketItem | null>(null)
+  // 상품별 채팅방 수 (당근처럼 관심도 표시)
+  const [chatCounts, setChatCounts] = useState<Record<string, number>>({})
 
   useEffect(() => { fetchItems() }, [])
 
@@ -54,6 +56,21 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
         return new Date(b.bumped_at ?? b.created_at).getTime() - new Date(a.bumped_at ?? a.created_at).getTime()
       })
       setItems(sorted)
+
+      // 이 상품들로 시작된 채팅방 수 (market source)
+      const ids = data.map(d => d.id)
+      if (ids.length > 0) {
+        const { data: rooms } = await supabase
+          .from('chat_rooms')
+          .select('source_id')
+          .eq('source_type', 'market')
+          .in('source_id', ids)
+        if (rooms) {
+          const counts: Record<string, number> = {}
+          for (const r of rooms) counts[(r as any).source_id] = (counts[(r as any).source_id] ?? 0) + 1
+          setChatCounts(counts)
+        }
+      }
     }
     setLoading(false)
   }
@@ -144,6 +161,7 @@ export default function MarketTab({ user, onRequireAuth, onOpenChat, resetKey = 
                     <p style={{ fontSize: '16px', fontWeight: 800, color: item.is_free ? 'var(--success)' : 'var(--ink)', margin: 'auto 0 0' }}>{formatPrice(item.price, item.is_free)}</p>
 
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                      {(chatCounts[item.id] ?? 0) > 0 && <Stat icon="💬" value={chatCounts[item.id]} />}
                       <Stat icon="👁" value={item.view_count} />
                       <Stat icon="❤️" value={item.like_count} />
                     </div>
