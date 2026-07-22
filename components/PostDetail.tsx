@@ -48,7 +48,7 @@ export function PostDetail({ post, user, onBack, onRequireAuth, onOpenChat, onSt
     ;(async () => {
       if (viewedRef.current !== post.id) {
         viewedRef.current = post.id
-        const { data, error } = await supabase.rpc('increment_view_count', { post_id: post.id, p_viewer: viewerKey() })
+        const { data, error } = await supabase.rpc('increment_view_count', { p_post_id: post.id, p_viewer: viewerKey() })
         if (error) console.warn('조회수 증가 실패', error)
         if (typeof data === 'number') { setViewCount(data); onViewCount?.(post.id, data) }
       }

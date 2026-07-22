@@ -42,24 +42,23 @@ alter table market_views enable row level security;
 -- 반환 타입이 void→int로 바뀌므로 기존 함수 제거 (replace 불가)
 drop function if exists increment_view_count(uuid);
 drop function if exists increment_view_count(uuid, text);
-create or replace function increment_view_count(post_id uuid, p_viewer text default null)
+-- 파라미터 이름이 컬럼(post_id)과 겹치면 'ambiguous' 오류가 나므로 p_post_id 로 구분
+create or replace function increment_view_count(p_post_id uuid, p_viewer text default null)
 returns int as $$
 declare
   v_key text := coalesce(nullif(p_viewer, ''), auth.uid()::text, gen_random_uuid()::text);
   v_new int;
-  v_inserted boolean := false;
 begin
   insert into post_views(post_id, viewer_key)
-  values (post_id, v_key)
+  values (p_post_id, v_key)
   on conflict (post_id, viewer_key) do nothing;
-  get diagnostics v_new = row_count;   -- 1이면 새로 들어감
-  v_inserted := (v_new = 1);
+  get diagnostics v_new = row_count;   -- 1이면 새로 들어감(처음 본 사람)
 
-  if v_inserted then
-    update posts set view_count = coalesce(view_count, 0) + 1 where id = post_id
+  if v_new = 1 then
+    update posts set view_count = coalesce(view_count, 0) + 1 where id = p_post_id
       returning view_count into v_new;
   else
-    select view_count into v_new from posts where id = post_id;
+    select view_count into v_new from posts where id = p_post_id;
   end if;
 
   return coalesce(v_new, 0);
@@ -72,24 +71,22 @@ $$ language plpgsql security definer;
 -- ============================================================
 drop function if exists increment_market_view(uuid);
 drop function if exists increment_market_view(uuid, text);
-create or replace function increment_market_view(item_id uuid, p_viewer text default null)
+create or replace function increment_market_view(p_item_id uuid, p_viewer text default null)
 returns int as $$
 declare
   v_key text := coalesce(nullif(p_viewer, ''), auth.uid()::text, gen_random_uuid()::text);
   v_new int;
-  v_inserted boolean := false;
 begin
   insert into market_views(item_id, viewer_key)
-  values (item_id, v_key)
+  values (p_item_id, v_key)
   on conflict (item_id, viewer_key) do nothing;
   get diagnostics v_new = row_count;
-  v_inserted := (v_new = 1);
 
-  if v_inserted then
-    update market_items set view_count = coalesce(view_count, 0) + 1 where id = item_id
+  if v_new = 1 then
+    update market_items set view_count = coalesce(view_count, 0) + 1 where id = p_item_id
       returning view_count into v_new;
   else
-    select view_count into v_new from market_items where id = item_id;
+    select view_count into v_new from market_items where id = p_item_id;
   end if;
 
   return coalesce(v_new, 0);

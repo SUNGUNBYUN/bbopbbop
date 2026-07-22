@@ -194,7 +194,7 @@ async function openDetail(item: MarketItem, setSelected: (i: MarketItem) => void
   setSelected(item)
   if (!viewedMarket.has(item.id)) {
     viewedMarket.add(item.id)
-    void supabase.rpc('increment_market_view', { item_id: item.id, p_viewer: viewerKey() })
+    void supabase.rpc('increment_market_view', { p_item_id: item.id, p_viewer: viewerKey() })
   }
 }
 
