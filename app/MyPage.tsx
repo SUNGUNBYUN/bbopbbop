@@ -23,13 +23,24 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
   const [balance, setBalance] = useState(0)
   const [loading, setLoading] = useState(true)
   const [counts, setCounts] = useState({ posts: 0, market: 0, feed: 0 })
+  const [info, setInfo] = useState({ gender: '', age_group: '', region: '' })
+  const [infoSaved, setInfoSaved] = useState(false)
 
   useEffect(() => { fetchData() }, [section])
   useEffect(() => {
     fetchCounts()
     getBalance(user.id).then(setBalance)
     getTotalEarned(user.id).then(setTotalEarned)
+    supabase.from('profiles').select('gender, age_group, region').eq('id', user.id).single()
+      .then(({ data }) => { if (data) setInfo({ gender: data.gender ?? '', age_group: data.age_group ?? '', region: data.region ?? '' }) })
   }, [])
+
+  async function saveInfo(patch: Partial<typeof info>) {
+    const next = { ...info, ...patch }
+    setInfo(next)
+    await supabase.rpc('update_my_info', { p_gender: next.gender, p_age_group: next.age_group, p_region: next.region })
+    setInfoSaved(true); setTimeout(() => setInfoSaved(false), 1500)
+  }
 
   async function fetchCounts() {
     const [p, m, f] = await Promise.all([
@@ -135,6 +146,33 @@ export default function MyPage({ user, onClose, onSelectPost }: Props) {
         >
           💌 베타 서비스예요 · 의견·버그 알려주기
         </a>
+      </div>
+
+      {/* 내 정보 (선택 입력 · 통계용) */}
+      <div style={{ padding: '11px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '7px' }}>
+          <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--ink-2)' }}>
+            내 정보 <span style={{ color: 'var(--ink-4)', fontWeight: 500 }}>(선택 · 더 나은 서비스를 위해)</span>
+          </span>
+          {infoSaved && <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 700 }}>저장됐어요 ✓</span>}
+        </div>
+        <div style={{ display: 'flex', gap: '7px' }}>
+          {([
+            ['gender', '성별', [['male', '남성'], ['female', '여성'], ['other', '기타']]],
+            ['age_group', '연령대', [['10s', '10대'], ['20s', '20대'], ['30s', '30대'], ['40s+', '40대+']]],
+            ['region', '지역', [['서울', '서울'], ['경기·인천', '경기·인천'], ['부산·경남', '부산·경남'], ['대구·경북', '대구·경북'], ['대전·충청', '대전·충청'], ['광주·전라', '광주·전라'], ['기타', '기타']]],
+          ] as const).map(([key, label, opts]) => (
+            <select
+              key={key}
+              value={(info as any)[key]}
+              onChange={(e) => saveInfo({ [key]: e.target.value } as any)}
+              style={{ flex: 1, minWidth: 0, padding: '9px 8px', borderRadius: 'var(--r-sm)', border: '1.5px solid var(--line)', background: 'var(--surface)', fontSize: '12.5px', color: (info as any)[key] ? 'var(--ink)' : 'var(--ink-4)', fontFamily: 'inherit', cursor: 'pointer' }}
+            >
+              <option value="">{label}</option>
+              {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          ))}
+        </div>
       </div>
 
       {/* 탭 */}

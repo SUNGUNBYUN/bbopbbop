@@ -238,8 +238,11 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
       const position = new window.kakao.maps.LatLng(place.lat, place.lng)
       const totalCount = place.posts.length + place.markets.length
       const hasItem = totalCount > 0
-      // 주민이 직접 등록(카카오에 없음)한 곳은 보라 테두리로 구분
-      const emptyBorder = place.handRegistered ? '#8B5CF6' : '#E2DED8'
+      // 주민이 직접 등록(카카오에 없음)한 곳은 제보 유무와 상관없이 보라 테두리로 구분
+      const purple = '#8B5CF6'
+      const borderColor = place.handRegistered ? purple : (hasItem ? '#FF5A5F' : '#E2DED8')
+      const badgeBg = place.handRegistered ? purple : '#FFC93C'
+      const badgeColor = place.handRegistered ? '#fff' : '#1A1523'
 
       const el = document.createElement('div')
       el.className = 'bbop-marker'
@@ -248,13 +251,15 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
         <div style="position:relative;">
           <div style="width:40px;height:40px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);
             background:${hasItem ? '#FF5A5F' : '#fff'};
-            border:2.5px solid ${hasItem ? '#FF5A5F' : emptyBorder};
+            border:3px solid ${borderColor};
             display:flex;align-items:center;justify-content:center;
             box-shadow:0 4px 12px rgba(26,21,35,0.18);">
             <span style="transform:rotate(45deg);font-size:18px;">🧸</span>
           </div>
-          ${hasItem ? `<div style="position:absolute;top:-6px;right:-8px;background:#FFC93C;color:#1A1523;
-            border-radius:10px;padding:1px 6px;font-size:11px;font-weight:800;border:2px solid #fff;">${totalCount}</div>` : ''}
+          ${hasItem ? `<div style="position:absolute;top:-6px;right:-8px;background:${badgeBg};color:${badgeColor};
+            border-radius:10px;padding:1px 6px;font-size:11px;font-weight:800;border:2px solid #fff;">${totalCount}</div>`
+          : (place.handRegistered ? `<div style="position:absolute;top:-6px;right:-8px;background:${purple};color:#fff;
+            border-radius:10px;padding:1px 5px;font-size:10px;font-weight:800;border:2px solid #fff;">주민</div>` : '')}
         </div>
         <div style="font-size:10.5px;color:#1A1523;margin-top:5px;background:rgba(255,255,255,0.95);
           padding:2px 7px;border-radius:6px;white-space:nowrap;max-width:90px;overflow:hidden;
