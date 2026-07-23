@@ -41,6 +41,15 @@ type MarketPin = {
   view_count: number
 }
 
+type DbPlace = {
+  id: string
+  place_name: string
+  address: string | null
+  latitude: number | null
+  longitude: number | null
+  kakao_place_id: string | null
+}
+
 type PlaceWithItems = {
   place_name: string
   address: string
@@ -49,6 +58,8 @@ type PlaceWithItems = {
   posts: Post[]
   markets: MarketPin[]
   isKakao: boolean
+  /** 카카오에 없는, 주민이 직접 등록한 가게 */
+  handRegistered?: boolean
 }
 
 type Props = {
@@ -66,6 +77,7 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
   const [sheetTab, setSheetTab] = useState<'posts' | 'markets'>('posts')
   const [posts, setPosts] = useState<Post[]>([])
   const [markets, setMarkets] = useState<MarketPin[]>([])
+  const [dbPlaces, setDbPlaces] = useState<DbPlace[]>([])
   const overlaysRef = useRef<any[]>([])
   const [showResearch, setShowResearch] = useState(false)
   const [researching, setResearching] = useState(false)
@@ -73,6 +85,8 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
   useEffect(() => {
     supabase.from('posts').select('*').then(({ data }) => { if (data) setPosts(data) })
     supabase.from('market_items').select('*').neq('status', 'sold').then(({ data }) => { if (data) setMarkets(data) })
+    // 우리 DB에 등록된 모든 가게 (주민 직접 등록 포함) — 제보가 없어도 지도에 핀 표시
+    supabase.from('places').select('id, place_name, address, latitude, longitude, kakao_place_id').then(({ data }) => { if (data) setDbPlaces(data as DbPlace[]) })
 
     if (window.kakao && window.kakao.maps && window.kakao.maps.Map) {
       setLoaded(true)
@@ -105,7 +119,7 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
   useEffect(() => {
     if (!loaded || !userLocation || !mapContainerRef.current) return
     initMap()
-  }, [loaded, userLocation, posts, markets])
+  }, [loaded, userLocation, posts, markets, dbPlaces])
 
   function initMap() {
     if (!userLocation || !mapContainerRef.current) return
@@ -158,20 +172,34 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
         })
       }
 
-      // 카카오에 없는 자체 등록 업체
-      // 가게 id가 있으면 그걸 기준으로 묶습니다. 이름 표기가 조금 달라도
-      // 같은 가게면 핀 하나로 합쳐집니다. (id가 없는 옛 글만 이름으로 묶음)
+      // 카카오에 없는 우리 DB 가게 (주민 직접 등록 포함)
+      // 1) places 테이블을 먼저 핀으로 깔아 제보/마켓이 없어도 항상 보이게 함
+      // 2) 제보/마켓은 place_id(우선)나 이름으로 그 핀에 붙임
       const kakaoNames = new Set(places.map(p => p.place_name))
       const customPlaces = new Map<string, PlaceWithItems>()
+
+      // 1) 등록된 모든 가게를 place_id 기준으로 핀 생성
+      dbPlaces.forEach(pl => {
+        if (pl.latitude == null || pl.longitude == null) return
+        if (kakaoNames.has(pl.place_name)) return   // 카카오 핀에 이미 표시됨
+        customPlaces.set(pl.id, {
+          place_name: pl.place_name, address: pl.address ?? '',
+          lat: pl.latitude, lng: pl.longitude,
+          posts: [], markets: [], isKakao: false,
+          handRegistered: pl.kakao_place_id == null,   // 카카오 없이 등록한 곳
+        })
+      })
 
       const groupKey = (row: { place_id?: string | null; place_name?: string | null; location?: string | null }) =>
         row.place_id ?? row.place_name ?? row.location ?? ''
 
+      // 2) 제보 붙이기 (place_id로 위 핀에 매칭. 없으면 좌표로 새 핀)
       posts.forEach(p => {
         const key = groupKey(p)
         const name = p.place_name ?? p.location ?? ''
-        if (!key || kakaoNames.has(name) || !p.latitude || !p.longitude) return
+        if (!key || kakaoNames.has(name)) return
         if (!customPlaces.has(key)) {
+          if (p.latitude == null || p.longitude == null) return
           customPlaces.set(key, {
             place_name: name, address: p.location ?? '',
             lat: p.latitude, lng: p.longitude,
@@ -184,8 +212,9 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
       markets.forEach(m => {
         const key = groupKey(m)
         const name = m.place_name ?? m.location ?? ''
-        if (!key || kakaoNames.has(name) || !m.latitude || !m.longitude) return
+        if (!key || kakaoNames.has(name)) return
         if (!customPlaces.has(key)) {
+          if (m.latitude == null || m.longitude == null) return
           customPlaces.set(key, {
             place_name: name, address: m.location ?? '',
             lat: m.latitude, lng: m.longitude,
@@ -209,6 +238,8 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
       const position = new window.kakao.maps.LatLng(place.lat, place.lng)
       const totalCount = place.posts.length + place.markets.length
       const hasItem = totalCount > 0
+      // 주민이 직접 등록(카카오에 없음)한 곳은 보라 테두리로 구분
+      const emptyBorder = place.handRegistered ? '#8B5CF6' : '#E2DED8'
 
       const el = document.createElement('div')
       el.className = 'bbop-marker'
@@ -217,7 +248,7 @@ export default function MapTab({ onSelectPost, onSelectMarket }: Props) {
         <div style="position:relative;">
           <div style="width:40px;height:40px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);
             background:${hasItem ? '#FF5A5F' : '#fff'};
-            border:2.5px solid ${hasItem ? '#FF5A5F' : '#E2DED8'};
+            border:2.5px solid ${hasItem ? '#FF5A5F' : emptyBorder};
             display:flex;align-items:center;justify-content:center;
             box-shadow:0 4px 12px rgba(26,21,35,0.18);">
             <span style="transform:rotate(45deg);font-size:18px;">🧸</span>
