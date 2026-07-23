@@ -19,6 +19,10 @@ export default function Auth({ onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [timer, setTimer] = useState(0)
+  // 최소 사용자 정보 (선택) — 가입 시 함께 수집
+  const [gender, setGender] = useState('')
+  const [ageGroup, setAgeGroup] = useState('')
+  const [region, setRegion] = useState('')
 
   function startTimer() {
     setTimer(600)
@@ -83,6 +87,10 @@ export default function Auth({ onClose, onSuccess }: Props) {
     const { error } = await supabase.auth.updateUser({ password })
     setLoading(false)
     if (error) { setError('비밀번호 설정에 실패했어요'); return }
+    // 가입 시 입력한 최소 정보 저장 (선택 — 실패해도 가입은 완료)
+    if (gender || ageGroup || region) {
+      try { await supabase.rpc('update_my_info', { p_gender: gender, p_age_group: ageGroup, p_region: region }) } catch { /* 가입은 그대로 완료 */ }
+    }
     onSuccess()  // 이미 로그인 상태
   }
 
@@ -150,6 +158,25 @@ export default function Auth({ onClose, onSuccess }: Props) {
             </Field>
             <Field label="이메일" required>
               <Input type="email" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendCode()} />
+            </Field>
+            <Field label="내 정보 (선택)">
+              <div style={{ display: 'flex', gap: '7px' }}>
+                {([
+                  [gender, setGender, '성별', [['male', '남성'], ['female', '여성'], ['other', '기타']]],
+                  [ageGroup, setAgeGroup, '연령대', [['10s', '10대'], ['20s', '20대'], ['30s', '30대'], ['40s+', '40대+']]],
+                  [region, setRegion, '지역', [['서울', '서울'], ['경기·인천', '경기·인천'], ['부산·경남', '부산·경남'], ['대구·경북', '대구·경북'], ['대전·충청', '대전·충청'], ['광주·전라', '광주·전라'], ['기타', '기타']]],
+                ] as const).map(([val, setter, label, opts], i) => (
+                  <select
+                    key={i}
+                    value={val}
+                    onChange={(e) => setter(e.target.value)}
+                    style={{ flex: 1, minWidth: 0, padding: '11px 8px', borderRadius: 'var(--r-md)', border: '1.5px solid var(--line)', background: 'var(--surface)', fontSize: '13px', color: val ? 'var(--ink)' : 'var(--ink-4)', fontFamily: 'inherit', cursor: 'pointer' }}
+                  >
+                    <option value="">{label}</option>
+                    {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                ))}
+              </div>
             </Field>
           </>
         )}
